@@ -25,11 +25,16 @@ int main_polycube (int argc, char *argv[])
             s.emplace (pc1);
         }
         else
-            for (const auto &pc : set[i - 1])
-            {
-                if (way == 0) pc.add_sprouts (s);
-                if (way == 1) pc.add_sprouts_omp (s);
-            }
+        {
+            if (way == 2)
+                PolyCube::add_sprouts (set[i], set[i - 1]);
+            else
+                for (const auto &pc : set[i - 1])
+                {
+                    if (way == 0) pc.add_sprouts (s);
+                    if (way == 1) pc.add_sprouts_omp (s);
+                }
+        }
         std::cout << s.size() << " polycubes\n";
         auto poly = PolyCube::get_poly (s);
         PolyCube::print_poly (i, poly);
