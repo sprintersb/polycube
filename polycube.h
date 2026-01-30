@@ -5,6 +5,7 @@
 #include <map>
 #include <utility> // std::move
 #include <iostream>
+#include <mutex>
 
 #include <cstdint>
 #include <cassert>
@@ -122,6 +123,15 @@ struct PolyCube
 {
     using Set = std::set<PolyCube>;
     using List = std::list<PolyCube>;
+    struct MuxSet
+    {
+        // std::mutex is not movable, so we have to use the
+        // swap trick to get a vector of given size, see
+        // https://stackoverflow.com/a/24170141/1556746
+        std::mutex mux;
+        Set set;
+    };
+    using Vector = std::vector<MuxSet>; // Indexed by corona size.
     Cells cubes;
     Cells corona;
     void add (const Dim &d)
@@ -149,6 +159,7 @@ struct PolyCube
     {
         return cubes.cmp (c.cubes) < 0;
     }
+    // Way 0
     void add_sprouts (Set &set) const
     {
         for (const Dim &d : corona.cells)
@@ -158,6 +169,8 @@ struct PolyCube
             set.emplace (std::move (pc));
         }
     }
+
+    // Way 1
     void add_sprouts_omp (Set &set) const
     {
         std::vector<const Dim*> dim;
@@ -176,6 +189,7 @@ struct PolyCube
         }
     }
 
+    // Way 2
     void add_sprouts (List &list) const
     {
         for (const Dim &d : corona.cells)
@@ -186,6 +200,7 @@ struct PolyCube
         }
     }
 
+    // Way 2
     static void add_sprouts (Set &set2, const Set &set)
     {
         std::vector<const PolyCube*> pc;
@@ -205,6 +220,42 @@ struct PolyCube
         }
     }
 
+    // Way 3
+    void add_sprouts (Vector &vms) const
+    {
+        for (const Dim &d : corona.cells)
+        {
+            PolyCube pc (*this);
+            pc.add (d);
+            auto &slot = vms[pc.corona.size ()];
+            slot.mux.lock ();
+            slot.set.emplace (std::move (pc));
+            slot.mux.unlock ();
+        }
+    }
+
+    // Way 3
+    static void add_sprouts (int dim, int n, Vector &vset2, const Vector &vset)
+    {
+        assert (n >= 2 && dim >= 1);
+        const int max_corona_size = 2 * (dim - 1) * n + 2;
+
+        Vector v (1 + max_corona_size);
+        vset2.swap (v); // Since resize() doesn't like std::mutex.
+
+        size_t n_polycubes = 0;
+        for (const auto &ms : vset)
+            n_polycubes += ms.set.size ();
+        std::vector<const PolyCube*> vpc (n_polycubes);
+        int j = 0;
+        for (const auto &ms : vset)
+            for (const auto &pc : ms.set)
+                vpc[j++] = &pc;
+#pragma omp parallel for
+        for (size_t j = 0; j < vpc.size (); ++j)
+            vpc[j]->add_sprouts (vset2);
+    }
+
     // Univariate polynomial over Z in sparse representation.
     using Poly = std::map<int,int>;
     static Poly get_poly (const Set &set)
@@ -219,6 +270,15 @@ struct PolyCube
             else
                 monome->second += 1;
         }
+        return poly;
+    }
+
+    static Poly get_poly (const Vector &vms)
+    {
+        Poly poly;
+        for (size_t j = 0; j < vms.size (); ++j)
+            if (vms[j].set.size ())
+                poly[j] = vms[j].set.size ();
         return poly;
     }
 
