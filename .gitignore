@@ -1,4 +1,10 @@
+*.[iso]
+*.obj
+*.ii
 *.x
+dorun
 
 *.png
 *.ppm
+
+.deps/

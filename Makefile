@@ -32,18 +32,18 @@ HOST_CXXFLAGS = -std=c++17 -fno-exceptions $(HOST_FLAGS) $(CXXFLAGS)
 %.obj: %.cpp $(EXTRA_DEP) $(DEPDIR)/%.d | $(DEPDIR)
 	$(GXX) -c $< $(HOST_CXXFLAGS) -o $@ $(I_GMP) $(DEPFLAGS)
 
-all: fill.x
+all: dorun
 
-fill.x: $(OBJS) $(EXTRA_DEP)
+dorun: $(OBJS) $(EXTRA_DEP)
 	$(GXX) $(HOST_CXXFLAGS) $(OBJS) -o $@ -Wl,--gc-sections -lm
 
-run: fill.x
+run: dorun
 	time ./$< $(ARGS)
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
 clean:
-	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.*)
+	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)
 	rm -f -- $(wildcard *.lst *.lss *.out *.map)
 	rm -rf -- $(wildcard .deps)
 

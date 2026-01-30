@@ -121,6 +121,7 @@ struct Cells
 struct PolyCube
 {
     using Set = std::set<PolyCube>;
+    using List = std::list<PolyCube>;
     Cells cubes;
     Cells corona;
     void add (const Dim &d)
@@ -172,6 +173,35 @@ struct PolyCube
             pc.add (* dim[i]);
 #pragma omp critical
             set.emplace (std::move (pc));
+        }
+    }
+
+    void add_sprouts (List &list) const
+    {
+        for (const Dim &d : corona.cells)
+        {
+            PolyCube pc (*this);
+            pc.add (d);
+            list.emplace_back (std::move (pc));
+        }
+    }
+
+    static void add_sprouts (Set &set2, const Set &set)
+    {
+        std::vector<const PolyCube*> pc;
+        pc.resize (set.size ());
+        int j = 0;
+        for (const auto &p : set)
+            pc[j++] = &p;
+
+#pragma omp parallel for
+        for (size_t j = 0; j < pc.size (); ++j)
+        {
+            List list;
+            pc[j]->add_sprouts (list);
+#pragma omp critical
+            for (auto &p : list)
+                set2.emplace (std::move (p));
         }
     }
 
