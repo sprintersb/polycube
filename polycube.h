@@ -1,4 +1,5 @@
 // -*- c++ -*-
+#include <array>
 #include <vector>
 #include <list>
 #include <set>
@@ -10,6 +11,35 @@
 #include <cstdint>
 #include <cassert>
 #include <omp.h>
+
+inline int64_t cube_count (int dim, int n_cells)
+{
+    static const std::array<std::vector<int64_t>, 4 + 1> cube_counts =
+    {
+        {
+            {},
+            {},
+            // n = 2: https://oeis.org/A001168
+            { 1, 1, 2, 6, 19, 63, 216, 760, 2725, 9910, 36446, 135268, 505861,
+              1903890, 7204874, 27394666, 104592937, 400795844, 1540820542,
+              5940738676, 22964779660, 88983512783, 345532572678, 1344372335524,
+              5239988770268, 20457802016011 },
+            // n = 3: https://oeis.org/A001931
+            { 1, 1, 3, 15, 86, 534, 3481, 23502, 162913, 1152870, 8294738,
+              60494549, 446205905, 3322769321, 24946773111, 188625900446,
+              1435074454755, 10977812452428, 84384157287999, 651459315795897,
+              5049008190434659, 39269513463794006, 306405169166373418 },
+            // n = 4: https://oeis.org/A151830
+            { 1, 1, 4, 28, 234, 2162, 21272, 218740, 2323730, 25314097,
+              281345096, 3178474308, 36400646766, 421693622520, 4933625049464,
+              58216226287844, 692095652493483 }
+        }
+    };
+    return ((size_t) dim < cube_counts.size ()
+            && (size_t) n_cells < cube_counts[dim].size ())
+        ? cube_counts[dim][n_cells]
+        : -1;
+}
 
 class Dim;
 class Cells;
@@ -421,15 +451,23 @@ struct PolyCube
         for (const auto &p : set)
             pc[j++] = &p;
 
+        int dim = (int) set.begin() -> cubes.cells.front().x.size ();
+        int n_cells = 1 + (int) set.begin () -> cubes.size ();
+        const int64_t n_cubes = cube_count (dim, n_cells);
 #pragma omp parallel for
         for (size_t j = 0; j < pc.size (); j += n_pc)
         {
             Set s;
-            for (int k = 0; k < n_pc; ++k)
+            bool done = false;
+            for (int k = 0; k < n_pc && !done; ++k)
                 if (j + k < pc.size ())
                     pc[j + k]->add_sprouts_merge (s);
 #pragma omp critical
-            PolyCube::merge (set2, s);
+            {
+                PolyCube::merge (set2, s);
+                if (n_cubes > 1 && n_cubes == (int64_t) set2.size ())
+                    done = true;
+            }
         }
     }
 
