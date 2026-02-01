@@ -323,6 +323,7 @@ struct PolyCube
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
     Cells cubes;
     Cells corona;
+    unsigned the_hash = 0;
 
     void add (const Dim &d)
     {
@@ -349,6 +350,7 @@ struct PolyCube
                 cubes.shift (i, -d->x[i]);
                 corona.shift (i, -d->x[i]);
             }
+        the_hash = cubes.hash ();
     }
     bool operator == (const PolyCube &c) const
     {
@@ -360,7 +362,7 @@ struct PolyCube
     }
     unsigned hash () const
     {
-        return cubes.hash ();
+        return the_hash;
     }
 
     // Way 0
@@ -436,9 +438,7 @@ struct PolyCube
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
-            {
                 pc.add_sprouts_way4 (vset2);
-            }
         }
     }
 
