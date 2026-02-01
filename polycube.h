@@ -124,6 +124,7 @@ public:
 
 struct DimIterator
 {
+    friend Dim;
     using iterator_category = std::forward_iterator_tag;
     using value_type        = Dim;
     using pointer           = value_type*;
@@ -165,7 +166,6 @@ public:
     {
         return !(*this == that);
     }
-    friend Dim;
 };
 
 DimIterator Dim::begin (int reset_val) const
@@ -274,7 +274,7 @@ struct Cells
     {
         for (auto &c : cells)
         {
-            if (i > c->size ())
+            if (i >= c->size ())
             {
                 std::cout << "change " << i << " of " << (*c) << "\n";
                 exit (1);
@@ -290,25 +290,11 @@ struct Cells
 
 struct PolyCube
 {
-    struct PComparatorEQ
-    {
-        bool operator () (const PolyCube *a, const PolyCube *b) const
-        {
-            return *a == *b;
-        }
-    };
     struct Hash
     {
         unsigned operator () (const PolyCube &pc) const
         {
             return pc.cubes.hash ();
-        }
-    };
-    struct PHash
-    {
-        unsigned operator () (const PolyCube *pc) const
-        {
-            return pc->cubes.hash ();
         }
     };
 
@@ -326,8 +312,6 @@ struct PolyCube
     }
 
     using List = std::list<PolyCube>;
-    using PSet = std::unordered_set<PolyCube*, PHash, PComparatorEQ>;
-    using PList = std::list<PolyCube*>;
     struct MuxSet
     {
         // std::mutex is not movable, so we have to use the
@@ -337,7 +321,6 @@ struct PolyCube
         Set set;
     };
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
-    //unsigned the_hash = 0;
     Cells cubes;
     Cells corona;
 
@@ -383,37 +366,6 @@ struct PolyCube
             PolyCube pc (*this);
             pc.add (d);
             set.emplace (std::move (pc));
-        }
-    }
-
-    // Way 2
-    void add_sprouts (List &list) const
-    {
-        for (const Dim *d : corona.cells)
-        {
-            PolyCube pc (*this);
-            pc.add (d);
-            list.emplace_back (std::move (pc));
-        }
-    }
-
-    // Way 2
-    static void add_sprouts (Set &set2, const Set &set)
-    {
-        std::vector<const PolyCube*> pc;
-        pc.resize (set.size ());
-        int j = 0;
-        for (const auto &p : set)
-            pc[j++] = &p;
-
-#pragma omp parallel for
-        for (size_t j = 0; j < pc.size (); ++j)
-        {
-            List list;
-            pc[j]->add_sprouts (list);
-#pragma omp critical
-            for (auto &p : list)
-                set2.emplace (std::move (p));
         }
     }
 
