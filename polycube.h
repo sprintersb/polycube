@@ -453,35 +453,6 @@ struct PolyCube
             vpc[j]->add_sprouts (vset2);
     }
 
-    // Way 4
-    static void add_sprouts_way4 (Set &set2, const Set &set)
-    {
-        volatile bool done = 0;
-        List list;
-#pragma omp parallel num_threads(2) shared(done, list)
-        {
-            if (omp_get_thread_num () == 0)
-            {
-                while (! done || ! list.empty ())
-                {
-                    __asm ("":::"memory");
-                    if (! list.empty ())
-                    {
-                        set2.emplace (std::move (list.front ()));
-                        list.pop_front ();
-                    }
-                    __asm ("":::"memory");
-                }
-            }
-            else if (omp_get_thread_num () == 1)
-            {
-                for (const auto &pc : set)
-                    pc.add_sprouts (list);
-                done = 1;
-            }
-        } // parallel
-    }
-
     // Way 6, 7
     void add_sprouts_merge (Set &set) const
     {
