@@ -53,8 +53,8 @@ struct Cells
     }
     void add (const Dim &d)
     {
-        auto end = cells.end ();
-        for (auto p = cells.begin(); ; ++p)
+        const auto &end = cells.end ();
+        for (auto &&p = cells.begin(); ; ++p)
             if (p == end)
             {
                 cells.emplace (p, d);
@@ -97,6 +97,14 @@ struct Cells
         }
         return p2 == e2 ? 0 : -1;
     }
+    unsigned hash () const
+    {
+        unsigned h = 0;
+        for (const auto &c : cells)
+            for (auto d : c.x)
+                h = h * 13 + (unsigned) d;
+        return h;
+    }
     bool contains (const Dim &d) const
     {
         for (const auto &c : cells)
@@ -119,10 +127,45 @@ struct Cells
     }
 };
 
+#include <unordered_set>
+
 struct PolyCube
 {
+    struct PComparator
+    {
+        bool operator () (const PolyCube *a, const PolyCube *b) const
+        {
+            return *a < *b;
+        }
+    };
+    struct Hash
+    {
+        unsigned operator () (const PolyCube &pc) const
+        {
+            //std::cout << "[" << pc.cubes.hash () << "]";
+            return pc.cubes.hash ();
+        }
+    };
+#if 0
     using Set = std::set<PolyCube>;
+#else
+    using Set = std::unordered_set<PolyCube, Hash>;
+#endif
+#pragma omp declare reduction(merge : Set : merge (omp_out, omp_in)) \
+    initializer (omp_priv = omp_orig)
+    static void merge (Set &sout, Set &sin)
+    {
+        sout.merge (sin);
+        //assert (sin.empty ());
+    }
+    static void merge (Set &s, PolyCube &&pc)
+    {
+        s.emplace (std::move (pc));
+    }
+
     using List = std::list<PolyCube>;
+    using PSet = std::set<PolyCube*, PComparator>;
+    using PList = std::list<PolyCube*>;
     struct MuxSet
     {
         // std::mutex is not movable, so we have to use the
@@ -132,6 +175,7 @@ struct PolyCube
         Set set;
     };
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
+    //unsigned the_hash = 0;
     Cells cubes;
     Cells corona;
     void add (const Dim &d)
@@ -154,6 +198,10 @@ struct PolyCube
                 cubes.shift (i, -d.x[i]);
                 corona.shift (i, -d.x[i]);
             }
+    }
+    bool operator == (const PolyCube &c) const
+    {
+        return cubes.cmp (c.cubes) == 0;
     }
     bool operator < (const PolyCube &c) const
     {
@@ -254,6 +302,114 @@ struct PolyCube
 #pragma omp parallel for
         for (size_t j = 0; j < vpc.size (); ++j)
             vpc[j]->add_sprouts (vset2);
+    }
+
+    // Way 4
+    static void add_sprouts_way4 (Set &set2, const Set &set)
+    {
+        volatile bool done = 0;
+        List list;
+#pragma omp parallel num_threads(2) shared(done, list)
+        {
+            if (omp_get_thread_num () == 0)
+            {
+                while (! done || ! list.empty ())
+                {
+                    __asm ("":::"memory");
+                    if (! list.empty ())
+                    {
+                        set2.emplace (std::move (list.front ()));
+                        list.pop_front ();
+                    }
+                    __asm ("":::"memory");
+                }
+            }
+            else if (omp_get_thread_num () == 1)
+            {
+                for (const auto &pc : set)
+                    pc.add_sprouts (list);
+                done = 1;
+            }
+        } // parallel
+    }
+
+    // Way 5
+    void add_sprouts (PList &list, std::mutex &mux) const
+    {
+        PList back;
+        for (const Dim &d : corona.cells)
+        {
+            PolyCube *pc = new PolyCube (*this);
+            pc->add (d);
+            //back.emplace_back (std::move (pc));
+            back.push_back (pc);
+        }
+        mux.lock ();
+        list.merge (std::move (back));
+        mux.unlock ();
+    }
+
+    // Way 5
+    static void add_sprouts_way5 (PSet &set2, const PSet &set)
+    {
+        volatile bool done = 0;
+        std::mutex mux;
+        PList list;
+#pragma omp parallel num_threads(2) shared(done, list, mux)
+        {
+            if (omp_get_thread_num () == 0)
+            {
+                while (! done || ! list.empty ())
+                {
+                    __asm("":::"memory");
+                    if (! list.empty ())
+                    {
+                        mux.lock ();
+                        //set2.emplace (* std::move (list.front ()));
+                        set2.insert (std::move (list.front ()));
+                        list.pop_front ();
+                        mux.unlock ();
+                    }
+                    __asm("":::"memory");
+                }
+            }
+            else if (omp_get_thread_num () == 1)
+            {
+                for (const auto &pc : set)
+                    pc->add_sprouts (list, mux);
+                done = 1;
+            }
+        } // parallel
+    }
+
+    // Way 6
+    void add_sprouts_merge (Set &set) const
+    {
+        for (const Dim &d : corona.cells)
+        {
+            PolyCube pc (*this);
+            pc.add (d);
+            PolyCube::merge (set, std::move (pc));
+        }
+    }
+
+    // Way 6
+    static void add_sprouts_reduce (Set &set2, const Set &set)
+    {
+        std::vector<const PolyCube*> pc;
+        pc.resize (set.size ());
+        int j = 0;
+        for (const auto &p : set)
+            pc[j++] = &p;
+
+#pragma omp parallel for
+        for (size_t j = 0; j < pc.size (); ++j)
+        {
+            Set s;
+            pc[j]->add_sprouts_merge (s);
+#pragma omp critical
+            PolyCube::merge (set2, s);
+        }
     }
 
     // Univariate polynomial over Z in sparse representation.
