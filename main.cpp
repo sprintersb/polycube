@@ -47,7 +47,11 @@ int main_polycube (int argc, char *argv[])
             else if (way == 6)
                 PolyCube::add_sprouts_6reduce (set[i], set[i - 1]);
             else if (way == 7)
+            {
                 PolyCube::add_sprouts_7reduce (set[i], set[i - 1], n_pc);
+                /*std::cout << "Buckets: " << set[i].bucket_count()
+                  << " (Load " << set[i].load_factor() << ")\n";*/
+            }
             else if (way == 3)
                 PolyCube::add_sprouts (dim, i, vset[i], vset[i - 1]);
             else

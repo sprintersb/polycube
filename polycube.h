@@ -2,8 +2,8 @@
 #include <array>
 #include <vector>
 #include <list>
-#include <set>
 #include <map>
+#include <unordered_set>
 #include <utility> // std::move
 #include <iostream>
 #include <mutex>
@@ -157,36 +157,38 @@ struct Cells
     }
 };
 
-#include <unordered_set>
 
 struct PolyCube
 {
-    struct PComparator
+    struct PComparatorEQ
     {
         bool operator () (const PolyCube *a, const PolyCube *b) const
         {
-            return *a < *b;
+            return *a == *b;
         }
     };
     struct Hash
     {
         unsigned operator () (const PolyCube &pc) const
         {
-            //std::cout << "[" << pc.cubes.hash () << "]";
             return pc.cubes.hash ();
         }
     };
-#if 0
-    using Set = std::set<PolyCube>;
-#else
+    struct PHash
+    {
+        unsigned operator () (const PolyCube *pc) const
+        {
+            return pc->cubes.hash ();
+        }
+    };
+
     using Set = std::unordered_set<PolyCube, Hash>;
-#endif
+
 #pragma omp declare reduction(merge : Set : merge (omp_out, omp_in)) \
     initializer (omp_priv = omp_orig)
     static void merge (Set &sout, Set &sin)
     {
         sout.merge (sin);
-        //assert (sin.empty ());
     }
     static void merge (Set &s, PolyCube &&pc)
     {
@@ -194,7 +196,7 @@ struct PolyCube
     }
 
     using List = std::list<PolyCube>;
-    using PSet = std::set<PolyCube*, PComparator>;
+    using PSet = std::unordered_set<PolyCube*, PHash, PComparatorEQ>;
     using PList = std::list<PolyCube*>;
     struct MuxSet
     {
@@ -412,7 +414,7 @@ struct PolyCube
         } // parallel
     }
 
-    // Way 6
+    // Way 6, 7
     void add_sprouts_merge (Set &set) const
     {
         for (const Dim &d : corona.cells)
