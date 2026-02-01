@@ -544,35 +544,43 @@ struct PolyCube
         return poly;
     }
 
-    static void print_poly (int n, const Poly &poly, const char *var = "q")
-    {
-        printf ("c");
-        printf (n > 9 ? "_{%d}(p) = p" : "_%d(p) = p", n);
-        if (n != 1) printf (n > 9 ? "^{%d}" : "^%d", n);
-        printf (" \\cdot ");
-        printf (poly.size() > 1 ? "(" : "");
-        bool start = true;
-        for (auto m : poly)
-        {
-            if (!start)
-                printf (" + ");
-            if (m.second != 1)
-                printf ("%d", m.second);
-            printf (m.first < 10 ? "%s^%d" : "%s^{%d}", var, m.first);
-            start = false;
-        }
-        printf ("%s\n", poly.size() > 1 ? ")" : "");
+    enum { POLY_TEX, POLY_LIST };
 
-        start = true;
-        printf ("/*%d*/ { ", n);
-        for (auto m : poly)
+    static void print_poly (int n, const Poly &poly,
+                            int style, const char *var = "q")
+    {
+        if (style == POLY_TEX)
         {
-            if (!start)
-                printf (", ");
-            printf ("%d,%d", m.second, m.first);
-            start = false;
+            printf ("c");
+            printf (n > 9 ? "_{%d}(p) = p" : "_%d(p) = p", n);
+            if (n != 1) printf (n > 9 ? "^{%d}" : "^%d", n);
+            printf (" \\cdot ");
+            printf (poly.size() > 1 ? "(" : "");
+            bool start = true;
+            for (auto m : poly)
+            {
+                if (!start)
+                    printf (" + ");
+                if (m.second != 1)
+                    printf ("%d", m.second);
+                printf (m.first < 10 ? "%s^%d" : "%s^{%d}", var, m.first);
+                start = false;
+            }
+            printf ("%s\n", poly.size() > 1 ? ")" : "");
         }
-        printf (" }\n");
+        else if (style == POLY_LIST)
+        {
+            bool start = true;
+            printf ("/*%d*/ { ", n);
+            for (auto m : poly)
+            {
+                if (!start)
+                    printf (", ");
+                printf ("%d,%d", m.second, m.first);
+                start = false;
+            }
+            printf (" }\n");
+        }
     }
 };
 

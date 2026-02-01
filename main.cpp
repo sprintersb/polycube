@@ -84,7 +84,7 @@ int main_polycube (int argc, char *argv[])
             poly = PolyCube::get_poly (set[i]);
         }
 
-        PolyCube::print_poly (i, poly);
+        PolyCube::print_poly (i, poly, PolyCube::POLY_TEX);
 
         if (cube_count (dim, i) >= 0)
             assert ((int64_t) ccount == cube_count (dim, i)
