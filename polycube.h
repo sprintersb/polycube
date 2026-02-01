@@ -294,7 +294,7 @@ struct PolyCube
     {
         unsigned operator () (const PolyCube &pc) const
         {
-            return pc.cubes.hash ();
+            return pc.hash ();
         }
     };
 
@@ -358,6 +358,11 @@ struct PolyCube
     {
         return cubes.cmp (c.cubes) < 0;
     }
+    unsigned hash () const
+    {
+        return cubes.hash ();
+    }
+
     // Way 0
     void add_sprouts (Set &set) const
     {
@@ -370,7 +375,7 @@ struct PolyCube
     }
 
     // Way 3
-    void add_sprouts (Vector &vms) const
+    void add_sprouts_way3 (Vector &vms) const
     {
         for (const Dim *d : corona.cells)
         {
@@ -384,7 +389,8 @@ struct PolyCube
     }
 
     // Way 3
-    static void add_sprouts (int dim, int n, Vector &vset2, const Vector &vset)
+    static void add_sprouts_way3 (int dim, int n,
+                                  Vector &vset2, const Vector &vset)
     {
         assert (n >= 2 && dim >= 1);
         const int max_corona_size = 2 * (dim - 1) * n + 2;
@@ -402,7 +408,38 @@ struct PolyCube
                 vpc[j++] = &pc;
 #pragma omp parallel for
         for (size_t j = 0; j < vpc.size (); ++j)
-            vpc[j]->add_sprouts (vset2);
+            vpc[j]->add_sprouts_way3 (vset2);
+    }
+
+    // Way 4
+    void add_sprouts_way4 (Vector &vms) const
+    {
+        for (const Dim *d : corona.cells)
+        {
+            PolyCube pc (*this);
+            pc.add (d);
+            MuxSet &slot = vms[pc.hash () % vms.size ()];
+            slot.mux.lock ();
+            slot.set.emplace (std::move (pc));
+            slot.mux.unlock ();
+        }
+    }
+
+    // Way 4
+    static void add_sprouts_way4 (int n_slots,
+                                  Vector &vset2, const Vector &vset)
+    {
+        Vector v (n_slots);
+        vset2.swap (v); // Since resize() doesn't like std::mutex.
+
+#pragma omp parallel for
+        for (size_t j = 0; j < vset.size (); ++j)
+        {
+            for (const auto &pc : vset[j].set)
+            {
+                pc.add_sprouts_way4 (vset2);
+            }
+        }
     }
 
     // Way 6, 7
@@ -466,6 +503,7 @@ struct PolyCube
 
     // Univariate polynomial over Z in sparse representation.
     using Poly = std::map<int,int>;
+
     static Poly get_poly (const Set &set)
     {
         Poly poly;
@@ -487,6 +525,22 @@ struct PolyCube
         for (size_t j = 0; j < vms.size (); ++j)
             if (vms[j].set.size ())
                 poly[j] = vms[j].set.size ();
+        return poly;
+    }
+
+    static Poly get_poly_way4 (const Vector &vms)
+    {
+        Poly poly;
+        for (const auto &ms : vms)
+            for (const auto &pc : ms.set)
+            {
+                const int coro = pc.corona.size ();
+                const auto &monome = poly.find (coro);
+                if (monome == poly.end ())
+                    poly[coro] = 1;
+                else
+                    monome->second += 1;
+            }
         return poly;
     }
 
