@@ -5,10 +5,12 @@ int main_polycube (int argc, char *argv[])
     int dim = 2;
     int level = 10;
     int way = 0;
+    int n_pc = 1;
 
     if (argc > 1)   sscanf (argv[1], "%i", &dim);
     if (argc > 2)   sscanf (argv[2], "%i", &level);
     if (argc > 3)   sscanf (argv[3], "%i", &way);
+    if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0..2
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3
@@ -43,7 +45,9 @@ int main_polycube (int argc, char *argv[])
             else if (way == 5)
                 PolyCube::add_sprouts_way5 (pset[i], pset[i - 1]);
             else if (way == 6)
-                PolyCube::add_sprouts_reduce (set[i], set[i - 1]);
+                PolyCube::add_sprouts_6reduce (set[i], set[i - 1]);
+            else if (way == 7)
+                PolyCube::add_sprouts_7reduce (set[i], set[i - 1], n_pc);
             else if (way == 3)
                 PolyCube::add_sprouts (dim, i, vset[i], vset[i - 1]);
             else

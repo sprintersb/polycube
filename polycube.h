@@ -394,7 +394,7 @@ struct PolyCube
     }
 
     // Way 6
-    static void add_sprouts_reduce (Set &set2, const Set &set)
+    static void add_sprouts_6reduce (Set &set2, const Set &set)
     {
         std::vector<const PolyCube*> pc;
         pc.resize (set.size ());
@@ -407,6 +407,27 @@ struct PolyCube
         {
             Set s;
             pc[j]->add_sprouts_merge (s);
+#pragma omp critical
+            PolyCube::merge (set2, s);
+        }
+    }
+
+    // Way 7
+    static void add_sprouts_7reduce (Set &set2, const Set &set, int n_pc)
+    {
+        std::vector<const PolyCube*> pc;
+        pc.resize (set.size ());
+        int j = 0;
+        for (const auto &p : set)
+            pc[j++] = &p;
+
+#pragma omp parallel for
+        for (size_t j = 0; j < pc.size (); j += n_pc)
+        {
+            Set s;
+            for (int k = 0; k < n_pc; ++k)
+                if (j + k < pc.size ())
+                    pc[j + k]->add_sprouts_merge (s);
 #pragma omp critical
             PolyCube::merge (set2, s);
         }
