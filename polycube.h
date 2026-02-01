@@ -521,7 +521,7 @@ struct PolyCube
         for (const auto &p : set)
             pc[j++] = &p;
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(runtime)
         for (size_t j = 0; j < pc.size (); ++j)
         {
             Set s;
@@ -543,7 +543,7 @@ struct PolyCube
         int dim = (int) set.begin() -> cubes.cells.front()->x.size ();
         int n_cells = 1 + (int) set.begin () -> cubes.size ();
         const int64_t n_cubes = cube_count (dim, n_cells);
-#pragma omp parallel for
+#pragma omp parallel for schedule(runtime)
         for (size_t j = 0; j < pc.size (); j += n_pc)
         {
             Set s;

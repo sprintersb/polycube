@@ -38,6 +38,7 @@ dorun: $(OBJS) $(EXTRA_DEP)
 	$(GXX) $(HOST_CXXFLAGS) $(OBJS) -o $@ -Wl,--gc-sections -lm
 
 run: dorun
+	@echo "OMP_SCHEDULE=$(OMP_SCHEDULE)"
 	time ./$< $(ARGS)
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
