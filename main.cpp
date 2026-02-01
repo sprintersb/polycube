@@ -1,4 +1,5 @@
 #include "polycube.h"
+#include <cstdlib>
 
 int main_polycube (int argc, char *argv[])
 {
@@ -87,7 +88,7 @@ int main_polycube (int argc, char *argv[])
             assert ((int64_t) ccount == cube_count (dim, i)
                     && "verify polycube count");
     }
-    return 0;
+    exit (0);
 }
 
 
