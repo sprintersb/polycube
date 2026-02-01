@@ -14,7 +14,7 @@ int main_polycube (int argc, char *argv[])
     if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
 
     assert (way >= 0 && way <= 7);
-    assert (way != 5);
+    assert (way != 5 && way != 1);
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0..2
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3
@@ -64,7 +64,6 @@ int main_polycube (int argc, char *argv[])
                 for (const auto &pc : set[i - 1])
                 {
                     if (way == 0) pc.add_sprouts (set[i]);
-                    if (way == 1) pc.add_sprouts_omp (set[i]);
                 }
         }
 

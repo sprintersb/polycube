@@ -386,25 +386,6 @@ struct PolyCube
         }
     }
 
-    // Way 1
-    void add_sprouts_omp (Set &set) const
-    {
-        std::vector<const Dim*> dim;
-        dim.resize (corona.size ());
-        int i = 0;
-        for (const Dim *d : corona.cells)
-            dim[i++] = d;
-
-#pragma omp parallel for
-        for (int i = 0; i < corona.size (); ++i)
-        {
-            PolyCube pc (*this);
-            pc.add (dim[i]);
-#pragma omp critical
-            set.emplace (std::move (pc));
-        }
-    }
-
     // Way 2
     void add_sprouts (List &list) const
     {
