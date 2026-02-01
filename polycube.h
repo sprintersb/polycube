@@ -1,8 +1,9 @@
 // -*- c++ -*-
 #include <array>
-#include <vector>
 #include <list>
 #include <map>
+#include <vector>
+#include <set>
 #include <unordered_set>
 #include <utility> // std::move
 #include <iostream>
@@ -52,6 +53,27 @@ struct Dim
 {
     using value_type = int8_t;
     std::vector<value_type> x;
+
+    // ? Must not be unordered_set due to rehash ?
+    using Pool = std::set<Dim>;
+    static inline Pool pool;
+    static const Dim* get (const Dim &d)
+    {
+        const Dim *addr;
+#pragma omp critical
+        {
+            const auto &f = pool.find (d);
+            if (f != pool.end ())
+                addr = & *f;
+            else
+            {
+                pool.insert (d);
+                addr = &* pool.find (d);
+            }
+        }
+        return addr;
+    }
+
     Dim (const std::vector<value_type> &x) : x(x) {}
     Dim (std::vector<value_type> &&x) : x(std::move (x)) {}
     static Dim dim (int n)
@@ -71,20 +93,32 @@ struct Dim
                 return x[i] - d.x[i];
         return 0;
     }
+    int cmp (const Dim *d) const
+    {
+        return cmp (*d);
+    }
+    bool operator ==  (const Dim &d) const
+    {
+        return cmp (d) == 0;
+    }
+    bool operator <  (const Dim &d) const
+    {
+        return cmp (d) < 0;
+    }
 };
 
 struct Cells
 {
-    std::list<Dim> cells;
+    std::list<const Dim*> cells;
 
     int size () const
     {
         return (int) cells.size ();
     }
-    void add (const Dim &d)
+    void add (const Dim *d)
     {
         const auto &end = cells.end ();
-        for (auto &&p = cells.begin(); ; ++p)
+        for (auto p = cells.begin(); ; ++p)
             if (p == end)
             {
                 cells.emplace (p, d);
@@ -92,7 +126,7 @@ struct Cells
             }
             else
             {
-                const int i = d.cmp (*p);
+                const int i = d->cmp (*p);
                 if (i > 0)
                     continue;
                 if (i < 0)
@@ -100,12 +134,12 @@ struct Cells
                 break;
             }
     }
-    void erase (const Dim &d)
+    void erase (const Dim *d)
     {
         auto end = cells.end ();
         for (auto p = cells.begin(); p != end; ++p)
         {
-            const int i = p->cmp (d);
+            const int i = (*p)->cmp (d);
             if (i == 0)
                 cells.erase (p);
             if (i >= 0)
@@ -120,7 +154,7 @@ struct Cells
         {
             if (p2 == e2)
                 return 1;
-            const int i = c.cmp (*p2);
+            const int i = c->cmp (*p2);
             if (i)
                 return i;
             ++p2;
@@ -131,15 +165,15 @@ struct Cells
     {
         unsigned h = 0;
         for (const auto &c : cells)
-            for (auto d : c.x)
+            for (auto d : c->x)
                 h = h * 13 + (unsigned) d;
         return h;
     }
-    bool contains (const Dim &d) const
+    bool contains (const Dim *d) const
     {
         for (const auto &c : cells)
         {
-            const int i = c.cmp (d);
+            const int i = c->cmp (d);
             if (i == 0)
                 return true;
             if (i > 0)
@@ -151,8 +185,15 @@ struct Cells
     {
         for (auto &c : cells)
         {
-            assert (i < c.size ());
-            c.x[i] += off;
+            if (i > c->size ())
+            {
+                std::cout << "change " << i << " of " << (*c) << "\n";
+                exit (1);
+            }
+            assert (i < c->size ());
+            Dim d (*c);
+            d.x[i] += off;
+            c = Dim::get (d);
         }
     }
 };
@@ -210,25 +251,31 @@ struct PolyCube
     //unsigned the_hash = 0;
     Cells cubes;
     Cells corona;
+
     void add (const Dim &d)
+    {
+        add (Dim::get (d));
+    }
+    void add (const Dim *d)
     {
         cubes.add (d);
         corona.erase (d);
         // Repair corona.
-        for (int i = 0; i < d.size (); ++i)
+        for (int i = 0; i < d->size (); ++i)
             for (int dir = 1; dir >= -1; dir -= 2)
             {
-                Dim d2 (d);
+                Dim d2 (*d);
                 d2.x[i] += dir;
-                if (! cubes.contains (d2))
-                    corona.add (d2);
+                const Dim *pd2 = Dim::get (d2);
+                if (! cubes.contains (pd2))
+                    corona.add (pd2);
             }
         // Normalize cubes.
-        for (int i = 0; i < d.size (); ++i)
-            if (d.x[i] < 0)
+        for (int i = 0; i < d->size (); ++i)
+            if (d->x[i] < 0)
             {
-                cubes.shift (i, -d.x[i]);
-                corona.shift (i, -d.x[i]);
+                cubes.shift (i, -d->x[i]);
+                corona.shift (i, -d->x[i]);
             }
     }
     bool operator == (const PolyCube &c) const
@@ -242,7 +289,7 @@ struct PolyCube
     // Way 0
     void add_sprouts (Set &set) const
     {
-        for (const Dim &d : corona.cells)
+        for (const Dim *d : corona.cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -256,14 +303,14 @@ struct PolyCube
         std::vector<const Dim*> dim;
         dim.resize (corona.size ());
         int i = 0;
-        for (const Dim &d : corona.cells)
-            dim[i++] = &d;
+        for (const Dim *d : corona.cells)
+            dim[i++] = d;
 
 #pragma omp parallel for
         for (int i = 0; i < corona.size (); ++i)
         {
             PolyCube pc (*this);
-            pc.add (* dim[i]);
+            pc.add (dim[i]);
 #pragma omp critical
             set.emplace (std::move (pc));
         }
@@ -272,7 +319,7 @@ struct PolyCube
     // Way 2
     void add_sprouts (List &list) const
     {
-        for (const Dim &d : corona.cells)
+        for (const Dim *d : corona.cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -303,7 +350,7 @@ struct PolyCube
     // Way 3
     void add_sprouts (Vector &vms) const
     {
-        for (const Dim &d : corona.cells)
+        for (const Dim *d : corona.cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -365,59 +412,10 @@ struct PolyCube
         } // parallel
     }
 
-    // Way 5
-    void add_sprouts (PList &list, std::mutex &mux) const
-    {
-        PList back;
-        for (const Dim &d : corona.cells)
-        {
-            PolyCube *pc = new PolyCube (*this);
-            pc->add (d);
-            //back.emplace_back (std::move (pc));
-            back.push_back (pc);
-        }
-        mux.lock ();
-        list.merge (std::move (back));
-        mux.unlock ();
-    }
-
-    // Way 5
-    static void add_sprouts_way5 (PSet &set2, const PSet &set)
-    {
-        volatile bool done = 0;
-        std::mutex mux;
-        PList list;
-#pragma omp parallel num_threads(2) shared(done, list, mux)
-        {
-            if (omp_get_thread_num () == 0)
-            {
-                while (! done || ! list.empty ())
-                {
-                    __asm("":::"memory");
-                    if (! list.empty ())
-                    {
-                        mux.lock ();
-                        //set2.emplace (* std::move (list.front ()));
-                        set2.insert (std::move (list.front ()));
-                        list.pop_front ();
-                        mux.unlock ();
-                    }
-                    __asm("":::"memory");
-                }
-            }
-            else if (omp_get_thread_num () == 1)
-            {
-                for (const auto &pc : set)
-                    pc->add_sprouts (list, mux);
-                done = 1;
-            }
-        } // parallel
-    }
-
     // Way 6, 7
     void add_sprouts_merge (Set &set) const
     {
-        for (const Dim &d : corona.cells)
+        for (const Dim *d : corona.cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -453,7 +451,7 @@ struct PolyCube
         for (const auto &p : set)
             pc[j++] = &p;
 
-        int dim = (int) set.begin() -> cubes.cells.front().x.size ();
+        int dim = (int) set.begin() -> cubes.cells.front()->x.size ();
         int n_cells = 1 + (int) set.begin () -> cubes.size ();
         const int64_t n_cubes = cube_count (dim, n_cells);
 #pragma omp parallel for

@@ -13,6 +13,9 @@ int main_polycube (int argc, char *argv[])
     if (argc > 3)   sscanf (argv[3], "%i", &way);
     if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
 
+    assert (way >= 0 && way <= 7);
+    assert (way != 5);
+
     std::vector<PolyCube::Set> set (1 + level);     // Way 0..2
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3
     std::vector<PolyCube::PSet> pset (1 + level);  // Way 5
@@ -44,7 +47,7 @@ int main_polycube (int argc, char *argv[])
             else if (way == 4)
                 PolyCube::add_sprouts_way4 (set[i], set[i - 1]);
             else if (way == 5)
-                PolyCube::add_sprouts_way5 (pset[i], pset[i - 1]);
+            {}
             else if (way == 6)
                 PolyCube::add_sprouts_6reduce (set[i], set[i - 1]);
             else if (way == 7)
@@ -63,7 +66,7 @@ int main_polycube (int argc, char *argv[])
                 }
         }
 
-        uint64_t ccount;
+        uint64_t ccount = -1;
         if (way == 3)
         {
             int n_polycubes = 0;
@@ -74,9 +77,7 @@ int main_polycube (int argc, char *argv[])
             PolyCube::print_poly (i, poly);
         }
         else if (way == 5)
-        {
-            std::cout << (ccount = pset[i].size()) << " polycubes\n";
-        }
+        {}
         else
         {
             std::cout << (ccount = set[i].size()) << " polycubes\n";
