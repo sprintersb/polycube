@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <utility> // std::move
 #include <iostream>
+#include <iterator>
 #include <mutex>
 
 #include <cstdint>
@@ -49,49 +50,58 @@ inline std::ostream& operator << (std::ostream&, const Dim&);
 inline std::ostream& operator << (std::ostream&, const Cells&);
 inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
+struct DimIterator;
+
 struct Dim
 {
     using value_type = int8_t;
-    std::vector<value_type> x;
+    using vector_type = std::vector<value_type>;
+    vector_type x;
 
     // ? Must not be unordered_set due to rehash ?
     using Pool = std::set<Dim>;
     static inline Pool pool;
-    static const Dim* get (const Dim &d)
+    static void extend_pool (int dim, int n_cells);
+    static const Dim* get (const Dim &d, bool may_update = 0)
     {
-        const Dim *addr;
-#pragma omp critical
+        const auto &f = pool.find (d);
+        if (f != pool.end ())
+            return & *f;
+        else if (may_update)
         {
-            const auto &f = pool.find (d);
-            if (f != pool.end ())
-                addr = & *f;
-            else
-            {
-                pool.insert (d);
-                addr = &* pool.find (d);
-            }
+            assert (omp_get_thread_num () == 0);
+            pool.insert (d);
+            return &* pool.find (d);
         }
-        return addr;
+        else // ! may_update
+        {
+            std::cout << "Dim(" << d << ") not found\n";
+            exit (2);
+        }
     }
 
-    Dim (const std::vector<value_type> &x) : x(x) {}
-    Dim (std::vector<value_type> &&x) : x(std::move (x)) {}
+    Dim (const vector_type &x) : x(x) {}
+    Dim (vector_type &&x) : x(std::move (x)) {}
     static Dim dim (int n)
     {
-        return std::vector<value_type> (n, 0);
+        return vector_type (n, 0);
     }
     int size () const
     {
         return (int) x.size ();
     }
+    int cmp (const vector_type &y) const
+    {
+        if (x.size () != y.size ())
+            return (int) x.size () - (int) y.size ();
+        for (int i = 0; i < size (); ++i)
+            if (x[i] != y[i])
+                return x[i] - y[i];
+        return 0;
+    }
     int cmp (const Dim &d) const
     {
-        if (size () != d.size ())
-            return size () - d.size ();
-        for (int i = 0; i < size (); ++i)
-            if (x[i] != d.x[i])
-                return x[i] - d.x[i];
-        return 0;
+        return cmp (d.x);
     }
     int cmp (const Dim *d) const
     {
@@ -105,7 +115,86 @@ struct Dim
     {
         return cmp (d) < 0;
     }
+    ///////////////////////////////////////////////////////////////////////////
+public:
+    DimIterator begin (int reset_val = 0) const;
+    DimIterator end () const;
+    ///////////////////////////////////////////////////////////////////////////
 };
+
+struct DimIterator
+{
+    using iterator_category = std::forward_iterator_tag;
+    using value_type        = Dim;
+    using pointer           = value_type*;
+    using reference         = value_type&;
+    const Dim d0 {{}};
+    Dim d {{}};
+    bool done = false;
+    int reset_value = 0;
+    DimIterator (const Dim &d0, int reset_value = 0)
+        : d0(d0), reset_value(reset_value)
+    {
+        d.x.resize (d0.x.size (), reset_value);
+    }
+private:
+    DimIterator (bool done) : done(done) {}
+public:
+    DimIterator& operator ++ ()
+    {
+        for (size_t i = 0; i < d.x.size (); ++i)
+            if (++d.x[i] >= d0.x[i] - reset_value)
+                d.x[i] = (int8_t) reset_value;
+            else
+                return *this;
+        done = true;
+        return *this;
+    }
+    const Dim& operator * ()
+    {
+        return d;
+    }
+
+    bool operator == (const DimIterator &that) const
+      {
+          if (done || that.done)
+              return done == that.done;
+          return d == that.d;
+      }
+    bool operator != (const DimIterator &that) const
+    {
+        return !(*this == that);
+    }
+    friend Dim;
+};
+
+DimIterator Dim::begin (int reset_val) const
+{
+    return DimIterator (*this, reset_val);
+}
+
+DimIterator Dim::end () const
+{
+    return DimIterator (true);
+}
+
+
+inline void Dim::extend_pool (int dim, int n_cells)
+{
+    Dim d (Dim::vector_type (dim, n_cells));
+    for (auto it = d.begin(-2); it != d.end (); ++it)
+    {
+        bool neg_p = false;
+        int dist = 0;
+        for (int i : (*it).x)
+        {
+            neg_p |= i < 0;
+            dist += i;
+        }
+        if (neg_p || (! neg_p && dist <= n_cells))
+            (void) Dim::get (*it, true);
+    }
+}
 
 struct Cells
 {
