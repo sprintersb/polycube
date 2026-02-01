@@ -39,7 +39,7 @@ dorun: $(OBJS) $(EXTRA_DEP)
 
 run: dorun
 	@echo "OMP_SCHEDULE=$(OMP_SCHEDULE)"
-	time ./$< $(ARGS)
+	time nice -20 ./$< $(ARGS)
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
