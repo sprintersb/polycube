@@ -24,6 +24,8 @@ int main_polycube (int argc, char *argv[])
     {
         std::cout << "== " << i << " ==\n";
 
+        Dim::extend_pool (dim, i);
+
         if (i == 1)
         {
             PolyCube pc1;
