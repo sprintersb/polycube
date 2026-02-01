@@ -12,6 +12,7 @@ int main_polycube (int argc, char *argv[])
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0..2
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3
+    std::vector<PolyCube::PSet> pset (1 + level);  // Way 5
 
     for (int i = 1; i <= level; ++i)
     {
@@ -21,7 +22,9 @@ int main_polycube (int argc, char *argv[])
         {
             PolyCube pc1;
             pc1.add (Dim::dim (dim));
-            if (way == 3)
+            if (way == 5)
+                pset[1].emplace (new PolyCube (pc1));
+            else if (way == 3)
             {
                 PolyCube::Vector v (1 + 2 * dim);
                 vset[1].swap (v);
@@ -35,10 +38,14 @@ int main_polycube (int argc, char *argv[])
         {
             if (way == 2)
                 PolyCube::add_sprouts (set[i], set[i - 1]);
+            else if (way == 4)
+                PolyCube::add_sprouts_way4 (set[i], set[i - 1]);
+            else if (way == 5)
+                PolyCube::add_sprouts_way5 (pset[i], pset[i - 1]);
+            else if (way == 6)
+                PolyCube::add_sprouts_reduce (set[i], set[i - 1]);
             else if (way == 3)
-            {
                 PolyCube::add_sprouts (dim, i, vset[i], vset[i - 1]);
-            }
             else
                 for (const auto &pc : set[i - 1])
                 {
@@ -55,6 +62,10 @@ int main_polycube (int argc, char *argv[])
             std::cout << n_polycubes << " polycubes\n";
             auto poly = PolyCube::get_poly (vset[i]);
             PolyCube::print_poly (i, poly);
+        }
+        else if (way == 5)
+        {
+            std::cout << pset[i].size() << " polycubes\n";
         }
         else
         {
