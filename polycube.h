@@ -408,7 +408,7 @@ struct PolyCube
         for (const auto &ms : vset)
             for (const auto &pc : ms.set)
                 vpc[j++] = &pc;
-#pragma omp parallel for
+#pragma omp parallel for schedule(runtime)
         for (size_t j = 0; j < vpc.size (); ++j)
             vpc[j]->add_sprouts_way3 (vset2);
     }
@@ -434,7 +434,7 @@ struct PolyCube
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex.
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(runtime)
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
