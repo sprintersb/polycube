@@ -14,11 +14,10 @@ int main_polycube (int argc, char *argv[])
     if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
 
     assert (way >= 0 && way <= 7);
-    assert (way != 5 && way != 1 && way != 4);
+    assert (way != 5 && way != 1 && way != 2 && way != 4);
 
-    std::vector<PolyCube::Set> set (1 + level);     // Way 0..2
+    std::vector<PolyCube::Set> set (1 + level);     // Way 0, 6, 7
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3
-    std::vector<PolyCube::PSet> pset (1 + level);  // Way 5
 
     for (int i = 1; i <= level; ++i)
     {
@@ -30,9 +29,7 @@ int main_polycube (int argc, char *argv[])
         {
             PolyCube pc1;
             pc1.add (Dim::dim (dim));
-            if (way == 5)
-                pset[1].emplace (new PolyCube (pc1));
-            else if (way == 3)
+            if (way == 3)
             {
                 PolyCube::Vector v (1 + 2 * dim);
                 vset[1].swap (v);
@@ -44,18 +41,10 @@ int main_polycube (int argc, char *argv[])
         }
         else
         {
-            if (way == 2)
-                PolyCube::add_sprouts (set[i], set[i - 1]);
-            else if (way == 5)
-            {}
-            else if (way == 6)
+            if (way == 6)
                 PolyCube::add_sprouts_6reduce (set[i], set[i - 1]);
             else if (way == 7)
-            {
                 PolyCube::add_sprouts_7reduce (set[i], set[i - 1], n_pc);
-                /*std::cout << "Buckets: " << set[i].bucket_count()
-                  << " (Load " << set[i].load_factor() << ")\n";*/
-            }
             else if (way == 3)
                 PolyCube::add_sprouts (dim, i, vset[i], vset[i - 1]);
             else
@@ -75,8 +64,6 @@ int main_polycube (int argc, char *argv[])
             auto poly = PolyCube::get_poly (vset[i]);
             PolyCube::print_poly (i, poly);
         }
-        else if (way == 5)
-        {}
         else
         {
             std::cout << (ccount = set[i].size()) << " polycubes\n";
