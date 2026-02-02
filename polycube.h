@@ -14,6 +14,9 @@
 #include <cassert>
 #include <omp.h>
 
+#define CHECK_SIZE 0
+#define MEMOIZE_HASH 1
+
 inline int64_t cube_count (int dim, int n_cells)
 {
     static const std::array<std::vector<int64_t>, 4 + 1> cube_counts =
@@ -53,8 +56,6 @@ inline std::ostream& operator << (std::ostream&, const PolyCube&);
 struct DimIterator;
 
 using hash_t = unsigned;
-
-#define CHECK_SIZE 0
 
 struct Dim
 {
@@ -302,8 +303,16 @@ struct PolyCube
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
     const PolyCube *m_dad = nullptr;
     Dim m_cube;
+#if MEMOIZE_HASH
+    hash_t m_hash;
+#endif
 
-    PolyCube (const PolyCube *pc, Dim d) : m_dad(pc), m_cube(d) {}
+    PolyCube (const PolyCube *pc, Dim d)
+        : m_dad(pc), m_cube(d)
+#ifdef MEMOIZE_HASH
+        , m_hash(calc_hash ())
+#endif
+    {}
 
     Cells cubes () const
     {
@@ -343,13 +352,21 @@ struct PolyCube
         return 0 == cubes_normalized().cmp (c.cubes_normalized());
     }
     // Symmetric in cubes and shift-invariant.
-    unsigned hash () const
+    hash_t calc_hash () const
     {
         const Dim d = min_cube ();
         hash_t h = 0;
         for (auto p = this; p; p = p->m_dad)
             h ^= (p->m_cube - d).hash ();
         return h;
+    }
+    hash_t hash () const
+    {
+#if MEMOIZE_HASH
+        return m_hash;
+#else
+        return calc_hash ();
+#endif
     }
     Dim min_cube () const
     {
