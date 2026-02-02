@@ -241,21 +241,6 @@ struct Cells
                 break;
         }
     }
-    int cmp (const Cells &c) const
-    {
-        auto &&p2 = c.cells.begin ();
-        auto &&e2 = c.cells.end ();
-        for (Dim d : cells)
-        {
-            if (p2 == e2)
-                return 1;
-            const int i = d.cmp (*p2);
-            if (i)
-                return i;
-            ++p2;
-        }
-        return p2 == e2 ? 0 : -1;
-    }
     bool contains (Dim d) const
     {
         for (Dim c : cells)
@@ -357,7 +342,16 @@ struct PolyCube
     // Symmetric in cubes and shift-invariant.
     bool operator == (const PolyCube &c) const
     {
-        return 0 == cubes_normalized().cmp (c.cubes_normalized());
+        const auto c1 = cubes().cells;
+        const auto c2 = c.cubes().cells;
+        if (c1.size () != c2.size ())
+            return false;
+        const Dim offset = min_cube () - c.min_cube ();
+        auto &&it2 = c2.begin ();
+        for (Dim d1 : c1)
+            if (d1 - *(it2++) != offset)
+                return false;
+        return true;
     }
     // Symmetric in cubes and shift-invariant.
     hash_t calc_hash () const
