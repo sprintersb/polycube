@@ -25,8 +25,7 @@ int main_polycube (int argc, char *argv[])
 
         if (i == 1)
         {
-            PolyCube pc1;
-            pc1.add (Dim::zeros (dim));
+            PolyCube pc1 (nullptr, Dim::zeros (dim));
             if (way == 3)
             {
                 // Index is corona size.

@@ -52,6 +52,8 @@ inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
 struct DimIterator;
 
+using hash_t = unsigned;
+
 #define CHECK_SIZE 0
 
 struct Dim
@@ -132,14 +134,25 @@ struct Dim
     Dim operator + (Dim d) const { Dim s (*this); s += d; return s; }
     Dim operator - (Dim d) const { Dim s (*this); s -= d; return s; }
 
+    // Don't use (int_t) since PolyCube wants a symmetric hash, but we want
+    // Dim{a,b} ^ Dim{c,d} != Dim{a,d} ^ Dim{c,b}.
+    hash_t hash () const
+    {
+        hash_t h = 0;
+        for (int i = 0; i < size (); ++i)
+            h = h * 13 + v[i];
+        return h;
+    }
+
     DimIterator begin () const;
     DimIterator end () const;
 };
 
+// Iterates over x with ||x||_2 = 1.
 struct DimIterator
 {
-    Dim d;
     using iterator_category = std::forward_iterator_tag;
+    Dim d;
     DimIterator (Dim d) : d(d) {}
     bool operator != (DimIterator it) const
     {
@@ -200,14 +213,15 @@ struct Cells
             }
             else
             {
-                if (d > *p)
+                const int i = d.cmp (*p);
+                if (i > 0)
                     continue;
-                if (d < *p)
+                if (i < 0)
                     cells.emplace (p, d);
                 break;
             }
     }
-    void erase (Dim d)
+    void erase (Dim d) // unused
     {
         const auto &end = cells.end ();
         for (auto &&p = cells.begin(); p != end; ++p)
@@ -234,13 +248,6 @@ struct Cells
         }
         return p2 == e2 ? 0 : -1;
     }
-    unsigned hash () const
-    {
-        unsigned h = 0;
-        for (Dim d : cells)
-            h = h * 13 + (Dim::int_t) d.v;
-        return h;
-    }
     bool contains (Dim d) const
     {
         for (Dim c : cells)
@@ -253,21 +260,14 @@ struct Cells
         }
         return false;
     }
-    void shift (int i, int off)
+    Cells operator - (Dim dim) const
     {
-        for (auto &c : cells)
-        {
-            if (i >= c.size ())
-            {
-                std::cout << "change " << i << " of " << c << "\n";
-                exit (1);
-            }
-            assert (i < c.size ());
-            c.v[i] += off;
-        }
+        Cells l (*this);
+        for (Dim &d : l.cells)
+            d -= dim;
+        return l;
     }
 };
-
 
 struct PolyCube
 {
@@ -281,8 +281,6 @@ struct PolyCube
 
     using Set = std::unordered_set<PolyCube, Hash>;
 
-#pragma omp declare reduction(merge : Set : merge (omp_out, omp_in)) \
-    initializer (omp_priv = omp_orig)
     static void merge (Set &sout, Set &sin)
     {
         sout.merge (sin);
@@ -302,15 +300,29 @@ struct PolyCube
         Set set;
     };
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
-    unsigned m_hash = 0;
-    Cells m_cubes;
+    const PolyCube *m_dad = nullptr;
+    Dim m_cube;
 
-    const Cells corona () const
+    PolyCube (const PolyCube *pc, Dim d) : m_dad(pc), m_cube(d) {}
+
+    Cells cubes () const
     {
+        Cells c;
+        for (auto p = this; p; p = p->m_dad)
+            c.add (p->m_cube);
+        return c;
+    }
+    Cells cubes_normalized () const
+    {
+        return cubes () - min_cube ();
+    }
+    Cells corona () const
+    {
+        const Cells &cs = cubes ();
         Cells cora;
-        for (Dim d : m_cubes.cells)
+        for (Dim d : cs.cells)
             for (Dim delta : d)
-                if (! m_cubes.contains (d + delta))
+                if (! cs.contains (d + delta))
                     cora.add (d + delta);
         return cora;
     }
@@ -318,38 +330,40 @@ struct PolyCube
     {
         return corona ().size ();
     }
-
-    void add (Dim d)
+    int cube_count () const
     {
-        m_cubes.add (d);
-        // Normalize m_cubes.
-        for (int i = 0; i < d.size (); ++i)
-            if (d.v[i] < 0)
-                m_cubes.shift (i, -d.v[i]);
-        m_hash = m_cubes.hash ();
+        int cnt = 0;
+        for (auto p = this; p; p = p->m_dad)
+            cnt += 1;
+        return cnt;
     }
+    // Symmetric in cubes and shift-invariant.
     bool operator == (const PolyCube &c) const
     {
-        return m_cubes.cmp (c.m_cubes) == 0;
+        return 0 == cubes_normalized().cmp (c.cubes_normalized());
     }
-    bool operator < (const PolyCube &c) const
-    {
-        return m_cubes.cmp (c.m_cubes) < 0;
-    }
+    // Symmetric in cubes and shift-invariant.
     unsigned hash () const
     {
-        return m_hash;
+        const Dim d = min_cube ();
+        hash_t h = 0;
+        for (auto p = this; p; p = p->m_dad)
+            h ^= (p->m_cube - d).hash ();
+        return h;
+    }
+    Dim min_cube () const
+    {
+        Dim d (m_cube);
+        for (auto p = m_dad; p; p = p->m_dad)
+            d = std::min (d, p->m_cube);
+        return d;
     }
 
     // Way 0
     void add_sprouts (Set &set) const
     {
         for (Dim d : corona().cells)
-        {
-            PolyCube pc (*this);
-            pc.add (d);
-            set.emplace (std::move (pc));
-        }
+            set.emplace (PolyCube (this, d));
     }
 
     // Way 3
@@ -357,11 +371,10 @@ struct PolyCube
     {
         for (Dim d : corona().cells)
         {
-            PolyCube pc (*this);
-            pc.add (d);
+            auto &&pc = PolyCube (this, d);
             auto &slot = vms[pc.corona_size ()];
             slot.mux.lock ();
-            slot.set.emplace (std::move (pc));
+            slot.set.emplace (pc);
             slot.mux.unlock ();
         }
     }
@@ -394,11 +407,10 @@ struct PolyCube
     {
         for (Dim d : corona().cells)
         {
-            PolyCube pc (*this);
-            pc.add (d);
+            auto &&pc = PolyCube (this, d);
             MuxSet &slot = vms[pc.hash () % vms.size ()];
             slot.mux.lock ();
-            slot.set.emplace (std::move (pc));
+            slot.set.emplace (pc);
             slot.mux.unlock ();
         }
     }
@@ -422,11 +434,7 @@ struct PolyCube
     void add_sprouts_merge (Set &set) const
     {
         for (Dim d : corona().cells)
-        {
-            PolyCube pc (*this);
-            pc.add (d);
-            PolyCube::merge (set, std::move (pc));
-        }
+            PolyCube::merge (set, PolyCube (this, d));
     }
 
     // Way 6
@@ -457,9 +465,9 @@ struct PolyCube
         for (const auto &p : set)
             pc[j++] = &p;
 
-        int dim = set.begin() -> m_cubes.cells.front().size ();
-        int n_cells = 1 + (int) set.begin () -> m_cubes.size ();
-        const int64_t n_cubes = cube_count (dim, n_cells);
+        int dim = set.begin() -> m_cube.size ();
+        int n_cells = 1 + (int) set.begin () -> cube_count ();
+        const int64_t n_cubes = ::cube_count (dim, n_cells);
 #pragma omp parallel for schedule(runtime)
         for (size_t j = 0; j < pc.size (); j += n_pc)
         {
@@ -573,7 +581,7 @@ struct PolyCube
 
 inline std::ostream& operator << (std::ostream &ost, const PolyCube &pc)
 {
-    ost << "cubes: " << pc.m_cubes << "\n";
+    ost << "cubes: " << pc.cubes() << "\n";
     ost << "coron: " << pc.corona() << "\n";
     return ost;
 }
