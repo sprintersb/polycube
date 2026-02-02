@@ -19,6 +19,12 @@ int main_polycube (int argc, char *argv[])
     std::vector<PolyCube::Set> set (1 + level);     // Way 0, 6, 7
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3, 4
 
+#if HAS_CORONA
+    std::cout << "HAS CORONA\n";
+#else
+    std::cout << "NO CORONA\n";
+#endif
+
     for (int i = 1; i <= level; ++i)
     {
         std::cout << "== " << i << " ==\n";
@@ -34,7 +40,7 @@ int main_polycube (int argc, char *argv[])
                 // Index is corona size.
                 PolyCube::Vector v (1 + 2 * dim);
                 vset[1].swap (v);
-                assert (pc1.corona.size () == 2 * dim);
+                assert (pc1.corona_size () == 2 * dim);
                 vset[1][2 * dim].set.emplace (pc1);
             }
             if (way == 4)
