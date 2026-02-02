@@ -563,19 +563,30 @@ struct PolyCube
         return poly;
     }
 
+    static void add_poly (Poly &p, const Poly &q)
+    {
+        for (const auto &q_mono : q)
+        {
+            const int expo = q_mono.first;
+            const int coef = q_mono.second;
+            const auto &p_mono = p.find (expo);
+            if (p_mono == p.end ())
+                p[expo] = coef;
+            else
+                p_mono->second += coef;
+        }
+    }
+
     static Poly get_poly_way4 (const Vector &vms)
     {
         Poly poly;
-        for (const auto &ms : vms)
-            for (const auto &pc : ms.set)
-            {
-                const int coro = pc.corona_size ();
-                const auto &monome = poly.find (coro);
-                if (monome == poly.end ())
-                    poly[coro] = 1;
-                else
-                    monome->second += 1;
-            }
+#pragma omp parallel for
+        for (size_t j = 0; j < vms.size (); ++j)
+        {
+            Poly p = PolyCube::get_poly (vms[j].set);
+#pragma omp critical
+            PolyCube::add_poly (poly, p);
+        }
         return poly;
     }
 
