@@ -62,6 +62,13 @@ struct Dim
     using value_t = int8_t;
     using vector_t = value_t __attribute__((vector_size(8)));
     using int_t = uint64_t;
+    struct SimpleHash
+    {
+        int_t operator () (const Dim &d) const
+        {
+            return (int_t) d.v;
+        }
+    };
     vector_t v = (vector_t) (int_t) 0;
     static inline constexpr int max_size = sizeof (vector_t) - 1;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
@@ -281,6 +288,8 @@ struct PolyCube
     };
 
     using Set = std::unordered_set<PolyCube, Hash>;
+    using Corona = std::unordered_set<Dim, Dim::SimpleHash>;
+    friend std::ostream& operator << (std::ostream&, const PolyCube::Corona&);
 
     static void merge (Set &sout, Set &sin)
     {
@@ -291,7 +300,6 @@ struct PolyCube
         s.emplace (std::move (pc));
     }
 
-    using List = std::list<PolyCube>;
     struct MuxSet
     {
         // std::mutex is not movable, so we have to use the
@@ -325,24 +333,24 @@ struct PolyCube
     {
         return cubes () - min_cube ();
     }
-    Cells corona () const
+    Corona corona () const
     {
         const Cells &cs = cubes ();
-        Cells cora;
+        Corona cora;
         for (Dim d : cs.cells)
             for (Dim delta : d)
                 if (! cs.contains (d + delta))
-                    cora.add (d + delta);
+                    cora.insert (d + delta);
         return cora;
     }
     int corona_size () const
     {
-        return corona ().size ();
+        return (int) corona ().size ();
     }
     int cube_count () const
     {
-        int cnt = 0;
-        for (auto p = this; p; p = p->m_dad)
+        int cnt = 1;
+        for (auto p = m_dad; p; p = p->m_dad)
             cnt += 1;
         return cnt;
     }
@@ -379,14 +387,14 @@ struct PolyCube
     // Way 0
     void add_sprouts (Set &set) const
     {
-        for (Dim d : corona().cells)
+        for (Dim d : corona())
             set.emplace (PolyCube (this, d));
     }
 
     // Way 3
     void add_sprouts_way3 (Vector &vms) const
     {
-        for (Dim d : corona().cells)
+        for (Dim d : corona())
         {
             auto &&pc = PolyCube (this, d);
             auto &slot = vms[pc.corona_size ()];
@@ -422,7 +430,7 @@ struct PolyCube
     // Way 4
     void add_sprouts_way4 (Vector &vms) const
     {
-        for (Dim d : corona().cells)
+        for (Dim d : corona())
         {
             auto &&pc = PolyCube (this, d);
             MuxSet &slot = vms[pc.hash () % vms.size ()];
@@ -450,7 +458,7 @@ struct PolyCube
     // Way 6, 7
     void add_sprouts_merge (Set &set) const
     {
-        for (Dim d : corona().cells)
+        for (Dim d : corona())
             PolyCube::merge (set, PolyCube (this, d));
     }
 
@@ -595,6 +603,15 @@ struct PolyCube
         }
     }
 };
+
+
+inline std::ostream& operator << (std::ostream &ost, const PolyCube::Corona &c)
+{
+    ost << "{#" << c.size ();
+    for (auto d : c)
+        ost << " " << d;
+    return ost << " }";
+}
 
 inline std::ostream& operator << (std::ostream &ost, const PolyCube &pc)
 {
