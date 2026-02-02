@@ -16,6 +16,7 @@
 
 #define CHECK_SIZE 0
 #define MEMOIZE_HASH 1
+#define MEMOIZE_MIN 0
 
 inline int64_t cube_count (int dim, int n_cells)
 {
@@ -299,11 +300,17 @@ struct PolyCube
 #if MEMOIZE_HASH
     hash_t m_hash;
 #endif
+#if MEMOIZE_MIN
+    Dim m_min_cube;
+#endif
 
     PolyCube (const PolyCube *pc, Dim d)
         : m_dad(pc), m_cube(d)
-#ifdef MEMOIZE_HASH
+#if MEMOIZE_HASH
         , m_hash(calc_hash ())
+#endif
+#if MEMOIZE_MIN
+        , m_min_cube(calc_min_cube ())
 #endif
     {}
 
@@ -370,12 +377,20 @@ struct PolyCube
         return calc_hash ();
 #endif
     }
-    Dim min_cube () const
+    Dim calc_min_cube () const
     {
         Dim d (m_cube);
         for (auto p = m_dad; p; p = p->m_dad)
             d = std::min (d, p->m_cube);
         return d;
+    }
+    Dim min_cube () const
+    {
+#if MEMOIZE_MIN
+        return m_min_cube;
+#else
+        return calc_min_cube ();
+#endif
     }
 
     // Way 0
