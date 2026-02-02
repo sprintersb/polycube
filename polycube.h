@@ -46,12 +46,141 @@ inline int64_t cube_count (int dim, int n_cells)
 class Dim;
 class Cells;
 class PolyCube;
-inline std::ostream& operator << (std::ostream&, const Dim&);
+inline std::ostream& operator << (std::ostream&, Dim);
 inline std::ostream& operator << (std::ostream&, const Cells&);
 inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
 struct DimIterator;
 
+#define CHECK_SIZE 0
+
+struct Dim
+{
+    using value_t = int8_t;
+    using vector_t = value_t __attribute__((vector_size(8)));
+    using int_t = uint64_t;
+    vector_t v = (vector_t) (int_t) 0;
+    static inline constexpr int max_size = sizeof (vector_t) - 1;
+    static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
+    Dim (std::initializer_list<value_t> &&il)
+    {
+        Dim::check_size ((int) il.size ());
+        v = Dim::all0;
+        set_size ((int) il.size ());
+        int j = 0;
+        for (auto i : il)
+            v[j++] = i;
+    }
+    Dim (const vector_t &v) : v(v) {}
+
+#if CHECK_SIZE
+    static void check_size (int s) { assert (s >= 0 && s <= Dim::max_size); }
+    void check_size (Dim d) const { assert (size () == d.size ()); }
+#else
+    static void check_size (int) {}
+    void check_size (Dim) const {}
+#endif
+
+    static Dim zeros (int n_zeros)
+    {
+        Dim::check_size (n_zeros);
+        Dim d{};
+        d.set_size (n_zeros);
+        return d;
+    }
+    int size () const
+    {
+        return v[Dim::max_size];
+    }
+    void set_size (int s)
+    {
+        Dim::check_size (s);
+        v[Dim::max_size] = s;
+    }
+    int operator [] (int i) const
+    {
+        return v[i];
+    }
+    // Shift-invariant comparison, so (int_t) <=> (int_t) won't work.
+    int cmp (Dim d) const
+    {
+        if (size () != d.size ())
+            return size () - d.size ();
+        for (int i = 0; i < size (); ++i)
+            if (v[i] != d.v[i])
+                return v[i] - d.v[i];
+        return 0;
+    }
+    bool operator == (Dim d) const { return (int_t) v == (int_t) d.v; }
+    bool operator != (Dim d) const { return (int_t) v != (int_t) d.v; }
+    bool operator <= (Dim d) const { return cmp (d) <= 0; }
+    bool operator >= (Dim d) const { return cmp (d) >= 0; }
+    bool operator <  (Dim d) const { return cmp (d) <  0; }
+    bool operator >  (Dim d) const { return cmp (d) >  0; }
+    void operator += (Dim d)
+    {
+        check_size (d);
+        v += d.v;
+        set_size (d.size ());
+    }
+    void operator -= (Dim d)
+    {
+        check_size (d);
+        v -= d.v;
+        set_size (d.size ());
+    }
+    Dim operator + (Dim d) const { Dim s (*this); s += d; return s; }
+    Dim operator - (Dim d) const { Dim s (*this); s -= d; return s; }
+
+    DimIterator begin () const;
+    DimIterator end () const;
+};
+
+struct DimIterator
+{
+    Dim d;
+    using iterator_category = std::forward_iterator_tag;
+    DimIterator (Dim d) : d(d) {}
+    bool operator != (DimIterator it) const
+    {
+        return d != it.d;
+    }
+    void operator ++ ()
+    {
+        for (int i = 0; ; ++i)
+            if (d.v[i] == 1)
+            {
+                d.v[i] = -1;
+                return;
+            }
+            else if (d.v[i] == -1)
+            {
+                d.v[i++] = 0;
+                if (i < d.size ())
+                    d.v[i] = 1;
+                else
+                    d.v = Dim::all0;
+                return;
+            }
+    }
+    Dim operator * () const
+    {
+        return d;
+    }
+};
+
+inline DimIterator Dim::end () const { return DimIterator (Dim{}); }
+inline DimIterator Dim::begin () const
+{
+    Dim d{};
+    if (size ())
+    {
+        d.set_size (size ());
+        d.v[0] = 1;
+    }
+    return DimIterator (d);
+}
+# if 0
 struct Dim
 {
     using value_type = int8_t;
@@ -195,16 +324,17 @@ inline void Dim::extend_pool (int dim, int n_cells)
             (void) Dim::get (*it, true);
     }
 }
+#endif
 
 struct Cells
 {
-    std::list<const Dim*> cells;
+    std::list<Dim> cells;
 
     int size () const
     {
-        return (int) cells.size ();
+        return cells.size ();
     }
-    void add (const Dim *d)
+    void add (Dim d)
     {
         const auto &end = cells.end ();
         for (auto &&p = cells.begin(); ; ++p)
@@ -215,23 +345,22 @@ struct Cells
             }
             else
             {
-                const int i = d->cmp (*p);
-                if (i > 0)
+                if (d > *p)
                     continue;
-                if (i < 0)
+                if (d < *p)
                     cells.emplace (p, d);
                 break;
             }
     }
-    void erase (const Dim *d)
+    void erase (Dim d)
     {
         const auto &end = cells.end ();
         for (auto &&p = cells.begin(); p != end; ++p)
         {
-            const int i = (*p)->cmp (d);
-            if (i == 0)
+            const bool done = *p >= d;
+            if (*p == d)
                 cells.erase (p);
-            if (i >= 0)
+            if (done)
                 break;
         }
     }
@@ -239,11 +368,11 @@ struct Cells
     {
         auto &&p2 = c.cells.begin ();
         auto &&e2 = c.cells.end ();
-        for (const auto &c : cells)
+        for (Dim d : cells)
         {
             if (p2 == e2)
                 return 1;
-            const int i = c->cmp (*p2);
+            const int i = d.cmp (*p2);
             if (i)
                 return i;
             ++p2;
@@ -253,16 +382,15 @@ struct Cells
     unsigned hash () const
     {
         unsigned h = 0;
-        for (const auto &c : cells)
-            for (auto d : c->x)
-                h = h * 13 + (unsigned) d;
+        for (Dim d : cells)
+            h = h * 13 + (Dim::int_t) d.v;
         return h;
     }
-    bool contains (const Dim *d) const
+    bool contains (Dim d) const
     {
-        for (const auto &c : cells)
+        for (Dim c : cells)
         {
-            const int i = c->cmp (d);
+            const int i = c.cmp (d);
             if (i == 0)
                 return true;
             if (i > 0)
@@ -274,15 +402,13 @@ struct Cells
     {
         for (auto &c : cells)
         {
-            if (i >= c->size ())
+            if (i >= c.size ())
             {
-                std::cout << "change " << i << " of " << (*c) << "\n";
+                std::cout << "change " << i << " of " << c << "\n";
                 exit (1);
             }
-            assert (i < c->size ());
-            Dim d (*c);
-            d.x[i] += off;
-            c = Dim::get (d);
+            assert (i < c.size ());
+            c.v[i] += off;
         }
     }
 };
@@ -323,68 +449,28 @@ struct PolyCube
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
     unsigned m_hash = 0;
     Cells m_cubes;
-#if HAS_CORONA
-    Cells m_corona;
-    const Cells& corona () const
-    {
-        return m_corona;
-    }
-    int corona_size () const
-    {
-        return m_corona.size ();
-    }
-#else // ! HAS_CORONA
-    using Corona = Cells;
-    int m_corona_size = -1;
-    const Corona corona () const
+
+    const Cells corona () const
     {
         Cells cora;
-        for (const Dim *d : m_cubes.cells)
-            for (int i = 0; i < d->size (); ++i)
-                for (int dir = 1; dir >= -1; dir -= 2)
-                {
-                    Dim d2 (*d);
-                    d2.x[i] += dir;
-                    const Dim *pd2 = Dim::get (d2);
-                    if (! m_cubes.contains (pd2))
-                        cora.add (pd2);
-                }
+        for (Dim d : m_cubes.cells)
+            for (Dim delta : d)
+                if (! m_cubes.contains (d + delta))
+                    cora.add (d + delta);
         return cora;
     }
     int corona_size () const
     {
         return corona ().size ();
     }
-#endif // HAS_CORONA ?
-    void add (const Dim &d)
-    {
-        add (Dim::get (d));
-    }
-    void add (const Dim *d)
+
+    void add (Dim d)
     {
         m_cubes.add (d);
-#if HAS_CORONA
-        // Repair corona.
-        m_corona.erase (d);
-        for (int i = 0; i < d->size (); ++i)
-            for (int dir = 1; dir >= -1; dir -= 2)
-            {
-                Dim d2 (*d);
-                d2.x[i] += dir;
-                const Dim *pd2 = Dim::get (d2);
-                if (! m_cubes.contains (pd2))
-                    m_corona.add (pd2);
-            }
-#endif // HAS_CORONA ?
         // Normalize m_cubes.
-        for (int i = 0; i < d->size (); ++i)
-            if (d->x[i] < 0)
-            {
-                m_cubes.shift (i, -d->x[i]);
-#if HAS_CORONA
-                m_corona.shift (i, -d->x[i]);
-#endif // HAS_CORONA
-            }
+        for (int i = 0; i < d.size (); ++i)
+            if (d.v[i] < 0)
+                m_cubes.shift (i, -d.v[i]);
         m_hash = m_cubes.hash ();
     }
     bool operator == (const PolyCube &c) const
@@ -403,7 +489,7 @@ struct PolyCube
     // Way 0
     void add_sprouts (Set &set) const
     {
-        for (const Dim *d : corona().cells)
+        for (Dim d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -414,7 +500,7 @@ struct PolyCube
     // Way 3
     void add_sprouts_way3 (Vector &vms) const
     {
-        for (const Dim *d : corona().cells)
+        for (Dim d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -451,7 +537,7 @@ struct PolyCube
     // Way 4
     void add_sprouts_way4 (Vector &vms) const
     {
-        for (const Dim *d : corona().cells)
+        for (Dim d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -480,7 +566,7 @@ struct PolyCube
     // Way 6, 7
     void add_sprouts_merge (Set &set) const
     {
-        for (const Dim *d : corona().cells)
+        for (Dim d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -516,7 +602,7 @@ struct PolyCube
         for (const auto &p : set)
             pc[j++] = &p;
 
-        int dim = (int) set.begin() -> m_cubes.cells.front()->x.size ();
+        int dim = set.begin() -> m_cubes.cells.front().size ();
         int n_cells = 1 + (int) set.begin () -> m_cubes.size ();
         const int64_t n_cubes = cube_count (dim, n_cells);
 #pragma omp parallel for schedule(runtime)
@@ -637,16 +723,15 @@ inline std::ostream& operator << (std::ostream &ost, const PolyCube &pc)
     return ost;
 }
 
-inline std::ostream& operator << (std::ostream &ost, const Dim &d)
+inline std::ostream& operator << (std::ostream &ost, Dim d)
 {
-    ost << "<";
-    const char *comma = "";
-    for (auto x : d.x)
+    char comma = '<';
+    for (int i = 0; i < d.size (); ++i)
     {
-        ost << comma << (int) x;
-        comma = ",";
+        ost << comma << (int) d[i];
+        comma = ',';
     }
-    return ost << ">";
+    return ost << '>';
 }
 
 inline std::ostream& operator << (std::ostream &ost, const Cells &c)
