@@ -182,7 +182,7 @@ DimIterator Dim::end () const
 inline void Dim::extend_pool (int dim, int n_cells)
 {
     Dim d (Dim::vector_type (dim, n_cells));
-    for (auto it = d.begin(-2); it != d.end (); ++it)
+    for (auto &&it = d.begin(-2); !it.done; ++it)
     {
         bool neg_p = false;
         int dist = 0;
@@ -207,7 +207,7 @@ struct Cells
     void add (const Dim *d)
     {
         const auto &end = cells.end ();
-        for (auto p = cells.begin(); ; ++p)
+        for (auto &&p = cells.begin(); ; ++p)
             if (p == end)
             {
                 cells.emplace (p, d);
@@ -225,8 +225,8 @@ struct Cells
     }
     void erase (const Dim *d)
     {
-        auto end = cells.end ();
-        for (auto p = cells.begin(); p != end; ++p)
+        const auto &end = cells.end ();
+        for (auto &&p = cells.begin(); p != end; ++p)
         {
             const int i = (*p)->cmp (d);
             if (i == 0)
@@ -237,8 +237,8 @@ struct Cells
     }
     int cmp (const Cells &c) const
     {
-        auto p2 = c.cells.begin ();
-        auto e2 = c.cells.end ();
+        auto &&p2 = c.cells.begin ();
+        auto &&e2 = c.cells.end ();
         for (const auto &c : cells)
         {
             if (p2 == e2)
@@ -321,54 +321,89 @@ struct PolyCube
         Set set;
     };
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
-    Cells cubes;
-    Cells corona;
-    unsigned the_hash = 0;
-
+    unsigned m_hash = 0;
+    Cells m_cubes;
+#if HAS_CORONA
+    Cells m_corona;
+    const Cells& corona () const
+    {
+        return m_corona;
+    }
+    int corona_size () const
+    {
+        return m_corona.size ();
+    }
+#else // ! HAS_CORONA
+    using Corona = Cells;
+    int m_corona_size = -1;
+    const Corona corona () const
+    {
+        Cells cora;
+        for (const Dim *d : m_cubes.cells)
+            for (int i = 0; i < d->size (); ++i)
+                for (int dir = 1; dir >= -1; dir -= 2)
+                {
+                    Dim d2 (*d);
+                    d2.x[i] += dir;
+                    const Dim *pd2 = Dim::get (d2);
+                    if (! m_cubes.contains (pd2))
+                        cora.add (pd2);
+                }
+        return cora;
+    }
+    int corona_size () const
+    {
+        return corona ().size ();
+    }
+#endif // HAS_CORONA ?
     void add (const Dim &d)
     {
         add (Dim::get (d));
     }
     void add (const Dim *d)
     {
-        cubes.add (d);
-        corona.erase (d);
+        m_cubes.add (d);
+#if HAS_CORONA
         // Repair corona.
+        m_corona.erase (d);
         for (int i = 0; i < d->size (); ++i)
             for (int dir = 1; dir >= -1; dir -= 2)
             {
                 Dim d2 (*d);
                 d2.x[i] += dir;
                 const Dim *pd2 = Dim::get (d2);
-                if (! cubes.contains (pd2))
-                    corona.add (pd2);
+                if (! m_cubes.contains (pd2))
+                    m_corona.add (pd2);
             }
-        // Normalize cubes.
+#endif // HAS_CORONA ?
+        // Normalize m_cubes.
         for (int i = 0; i < d->size (); ++i)
             if (d->x[i] < 0)
             {
-                cubes.shift (i, -d->x[i]);
-                corona.shift (i, -d->x[i]);
+                m_cubes.shift (i, -d->x[i]);
+#if HAS_CORONA
+                m_corona.shift (i, -d->x[i]);
+#endif // HAS_CORONA
             }
-        the_hash = cubes.hash ();
+        m_hash = m_cubes.hash ();
     }
     bool operator == (const PolyCube &c) const
     {
-        return cubes.cmp (c.cubes) == 0;
+        return m_cubes.cmp (c.m_cubes) == 0;
     }
     bool operator < (const PolyCube &c) const
     {
-        return cubes.cmp (c.cubes) < 0;
+        return m_cubes.cmp (c.m_cubes) < 0;
     }
     unsigned hash () const
     {
-        return the_hash;
+        return m_hash;
     }
 
     // Way 0
     void add_sprouts (Set &set) const
     {
-        for (const Dim *d : corona.cells)
+        for (const Dim *d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -379,11 +414,11 @@ struct PolyCube
     // Way 3
     void add_sprouts_way3 (Vector &vms) const
     {
-        for (const Dim *d : corona.cells)
+        for (const Dim *d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
-            auto &slot = vms[pc.corona.size ()];
+            auto &slot = vms[pc.corona_size ()];
             slot.mux.lock ();
             slot.set.emplace (std::move (pc));
             slot.mux.unlock ();
@@ -416,7 +451,7 @@ struct PolyCube
     // Way 4
     void add_sprouts_way4 (Vector &vms) const
     {
-        for (const Dim *d : corona.cells)
+        for (const Dim *d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -445,7 +480,7 @@ struct PolyCube
     // Way 6, 7
     void add_sprouts_merge (Set &set) const
     {
-        for (const Dim *d : corona.cells)
+        for (const Dim *d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
@@ -481,8 +516,8 @@ struct PolyCube
         for (const auto &p : set)
             pc[j++] = &p;
 
-        int dim = (int) set.begin() -> cubes.cells.front()->x.size ();
-        int n_cells = 1 + (int) set.begin () -> cubes.size ();
+        int dim = (int) set.begin() -> m_cubes.cells.front()->x.size ();
+        int n_cells = 1 + (int) set.begin () -> m_cubes.size ();
         const int64_t n_cubes = cube_count (dim, n_cells);
 #pragma omp parallel for schedule(runtime)
         for (size_t j = 0; j < pc.size (); j += n_pc)
@@ -509,7 +544,7 @@ struct PolyCube
         Poly poly;
         for (const auto &pc : set)
         {
-            const int coro = pc.corona.size ();
+            const int coro = pc.corona_size ();
             const auto &monome = poly.find (coro);
             if (monome == poly.end ())
                 poly[coro] = 1;
@@ -534,7 +569,7 @@ struct PolyCube
         for (const auto &ms : vms)
             for (const auto &pc : ms.set)
             {
-                const int coro = pc.corona.size ();
+                const int coro = pc.corona_size ();
                 const auto &monome = poly.find (coro);
                 if (monome == poly.end ())
                     poly[coro] = 1;
@@ -586,8 +621,8 @@ struct PolyCube
 
 inline std::ostream& operator << (std::ostream &ost, const PolyCube &pc)
 {
-    ost << "cubes: " << pc.cubes << "\n";
-    ost << "coron: " << pc.corona << "\n";
+    ost << "cubes: " << pc.m_cubes << "\n";
+    ost << "coron: " << pc.corona() << "\n";
     return ost;
 }
 
