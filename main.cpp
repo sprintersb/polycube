@@ -19,22 +19,14 @@ int main_polycube (int argc, char *argv[])
     std::vector<PolyCube::Set> set (1 + level);     // Way 0, 6, 7
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3, 4
 
-#if HAS_CORONA
-    std::cout << "HAS CORONA\n";
-#else
-    std::cout << "NO CORONA\n";
-#endif
-
     for (int i = 1; i <= level; ++i)
     {
         std::cout << "== " << i << " ==\n";
 
-        Dim::extend_pool (dim, i);
-
         if (i == 1)
         {
             PolyCube pc1;
-            pc1.add (Dim::dim (dim));
+            pc1.add (Dim::zeros (dim));
             if (way == 3)
             {
                 // Index is corona size.
