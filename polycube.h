@@ -436,7 +436,7 @@ struct PolyCube
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex.
 
-#pragma omp parallel for schedule(runtime)
+#pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
@@ -488,7 +488,7 @@ struct PolyCube
     static Poly get_poly_way4 (const Vector &vms)
     {
         Poly poly;
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vms.size (); ++j)
         {
             Poly p = PolyCube::get_poly (vms[j].set);
