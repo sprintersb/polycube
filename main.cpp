@@ -16,6 +16,8 @@ int main_polycube (int argc, char *argv[])
     assert (way >= 0 && way <= 7);
     assert (way != 5 && way != 1 && way != 2);
 
+    assert (dim == DIM);
+
     std::vector<PolyCube::Set> set (1 + level);     // Way 0, 6, 7
     std::vector<PolyCube::Vector> vset (1 + level); // Way 3, 4
 
