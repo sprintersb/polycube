@@ -72,6 +72,7 @@ struct Dim
 
     vector_t v = (vector_t) (int_t) 0;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
+    Dim () : v(Dim::all0) {}
     Dim (std::initializer_list<value_t> &&il)
     {
         assert (il.size () == 0 || il.size () == DIM);
@@ -119,46 +120,39 @@ struct Dim
 };
 
 
-struct DimIterator
+class DimIterator
 {
-    Dim d;
-    using iterator_category = std::forward_iterator_tag;
-    DimIterator (Dim d) : d(d) {}
-    bool operator != (DimIterator it) const
+    using Corona0 = std::array<Dim, 2 * DIM>;
+    static inline Corona0 get_corona0 ()
     {
-        return d != it.d;
+        Corona0 c;
+        for (int i = 0; i < 2 * DIM; ++i)
+            c[i].v[i / 2] = i % 2 == 0 ? 1 : -1;
+        return c;
+    }
+    static inline const Corona0 corona0 = DimIterator::get_corona0 ();
+    int pos;
+
+    DimIterator (int pos) : pos(pos) {}
+    friend Dim;
+public:
+    bool operator != (DimIterator di) const
+    {
+        return pos != di.pos;
     }
     void operator ++ ()
     {
-        for (int i = 0; ; ++i)
-            if (d.v[i] == 1)
-            {
-                d.v[i] = -1;
-                return;
-            }
-            else if (d.v[i] == -1)
-            {
-                d.v[i++] = 0;
-                if (i < d.size ())
-                    d.v[i] = 1;
-                else
-                    d.v = Dim::all0;
-                return;
-            }
+        ++ pos;
     }
     Dim operator * () const
     {
-        return d;
+        return DimIterator::corona0[pos];
     }
 };
 
-inline DimIterator Dim::end () const { return DimIterator (Dim{}); }
-inline DimIterator Dim::begin () const
-{
-    Dim d{};
-    d.v[0] = 1;
-    return DimIterator (d);
-}
+inline DimIterator Dim::begin () const { return DimIterator (0); }
+inline DimIterator Dim::end ()   const { return DimIterator (2 * DIM); }
+
 
 // Is a vect since that is most memory friendly.
 struct Cubes
