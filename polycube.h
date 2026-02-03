@@ -54,50 +54,42 @@ inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
 struct DimIterator;
 
-#define CHECK_SIZE 0
-
 struct Dim
 {
     using value_t = int8_t;
+#if DIM == 2
+    using vector_t = value_t __attribute__((vector_size(2)));
+    using int_t = uint16_t;
+#elif DIM > 2 && DIM <= 4
+    using vector_t = value_t __attribute__((vector_size(4)));
+    using int_t = uint32_t;
+#elif DIM > 4 && DIM <= 8
     using vector_t = value_t __attribute__((vector_size(8)));
     using int_t = uint64_t;
+#else
+#error DIM=?
+#endif
+
     vector_t v = (vector_t) (int_t) 0;
-    static inline constexpr int max_size = sizeof (vector_t) - 1;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
     Dim (std::initializer_list<value_t> &&il)
     {
-        Dim::check_size ((int) il.size ());
+        assert (il.size () == 0 || il.size () == DIM);
         v = Dim::all0;
-        set_size ((int) il.size ());
         int j = 0;
         for (auto i : il)
             v[j++] = i;
     }
     Dim (const vector_t &v) : v(v) {}
 
-#if CHECK_SIZE
-    static void check_size (int s) { assert (s >= 0 && s <= Dim::max_size); }
-    void check_size (Dim d) const { assert (size () == d.size ()); }
-#else
-    static void check_size (int) {}
-    void check_size (Dim) const {}
-#endif
-
-    static Dim zeros (int n_zeros)
+    static Dim zeros (int)
     {
-        Dim::check_size (n_zeros);
         Dim d{};
-        d.set_size (n_zeros);
         return d;
     }
     int size () const
     {
-        return v[Dim::max_size];
-    }
-    void set_size (int s)
-    {
-        Dim::check_size (s);
-        v[Dim::max_size] = s;
+        return DIM;
     }
     int operator [] (int i) const
     {
@@ -106,8 +98,6 @@ struct Dim
     // Shift-invariant comparison, so (int_t) <=> (int_t) won't work.
     int cmp (Dim d) const
     {
-        if (size () != d.size ())
-            return size () - d.size ();
         for (int i = 0; i < size (); ++i)
             if (v[i] != d.v[i])
                 return v[i] - d.v[i];
@@ -119,24 +109,15 @@ struct Dim
     bool operator >= (Dim d) const { return cmp (d) >= 0; }
     bool operator <  (Dim d) const { return cmp (d) <  0; }
     bool operator >  (Dim d) const { return cmp (d) >  0; }
-    void operator += (Dim d)
-    {
-        check_size (d);
-        v += d.v;
-        set_size (d.size ());
-    }
-    void operator -= (Dim d)
-    {
-        check_size (d);
-        v -= d.v;
-        set_size (d.size ());
-    }
+    void operator += (Dim d) { v += d.v; }
+    void operator -= (Dim d) { v -= d.v; }
     Dim operator + (Dim d) const { Dim s (*this); s += d; return s; }
     Dim operator - (Dim d) const { Dim s (*this); s -= d; return s; }
 
     DimIterator begin () const;
     DimIterator end () const;
 };
+
 
 struct DimIterator
 {
@@ -175,11 +156,7 @@ inline DimIterator Dim::end () const { return DimIterator (Dim{}); }
 inline DimIterator Dim::begin () const
 {
     Dim d{};
-    if (size ())
-    {
-        d.set_size (size ());
-        d.v[0] = 1;
-    }
+    d.v[0] = 1;
     return DimIterator (d);
 }
 
