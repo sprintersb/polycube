@@ -9,8 +9,10 @@
 #include <iostream>
 #include <iterator>
 #include <mutex>
+#include <atomic>
 
 #include <cstdint>
+#include <cinttypes>
 #include <cassert>
 #include <omp.h>
 
@@ -326,6 +328,7 @@ struct Cells
     }
 };
 
+#define BACK "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
 
 struct PolyCube
 {
@@ -430,18 +433,40 @@ struct PolyCube
     }
 
     // Way 4
-    static void add_sprouts_way4 (int n_slots,
+    static void add_sprouts_way4 (int n_cells, int n_slots,
                                   Vector &vset2, const Vector &vset)
     {
         Vector v (n_slots);
-        vset2.swap (v); // Since resize() doesn't like std::mutex.
+        vset2.swap (v); // Since resize() doesn't like std::mutex
+
+        // Only for printing stat.
+        const int64_t n_cubes = cube_count (DIM, n_cells);
+        std::atomic<int64_t> pc_count = 0;
+        int64_t pc_show = pc_count;
 
 #pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
-                pc.add_sprouts_way4 (vset2);
-        }
+                pc_count += pc.add_sprouts_way4 (vset2);
+
+            // Print stat.
+            if (omp_get_thread_num () == 0)
+            {
+                const int64_t pcs = pc_count;
+                if (pc_show == 0 || pcs - pc_show > 100000)
+                {
+                    pc_show = pcs;
+                    printf ("%s%" PRIi64 " Cubs", BACK, pcs);
+                    if (n_cubes > 1)
+                        printf (" = %.1f%%", 100.0 * pcs / n_cubes);
+                    fflush (stdout);
+                }
+            } // master
+        } // parallel for
+
+        printf ("%s                                    %s%s", BACK, BACK, BACK);
+        fflush (stdout);
     }
 
     // Univariate polynomial over Z in sparse representation.
