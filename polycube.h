@@ -53,6 +53,7 @@ inline std::ostream& operator << (std::ostream&, const Cubes&);
 inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
 struct DimIterator;
+using hash_t = uint32_t;
 
 struct Dim
 {
@@ -203,11 +204,11 @@ struct Cubes
         }
         return p2 == e2 ? 0 : -1;
     }
-    unsigned hash () const
+    hash_t hash () const
     {
-        unsigned h = 0;
+        hash_t h = 0;
         for (Dim d : cells)
-            h = h * 13 + (Dim::int_t) d.v;
+            h = h * 13 + (hash_t) (Dim::int_t) d.v;
         return h;
     }
     bool contains (Dim d) const
@@ -291,11 +292,11 @@ struct Cells
         }
         return p2 == e2 ? 0 : -1;
     }
-    unsigned hash () const
+    hash_t hash () const
     {
-        unsigned h = 0;
+        hash_t h = 0;
         for (Dim d : cells)
-            h = h * 13 + (Dim::int_t) d.v;
+            h = h * 13 + (hash_t) (Dim::int_t) d.v;
         return h;
     }
     bool contains (Dim d) const
@@ -330,7 +331,7 @@ struct PolyCube
 {
     struct Hash
     {
-        unsigned operator () (const PolyCube &pc) const
+        hash_t operator () (const PolyCube &pc) const
         {
             return pc.hash ();
         }
@@ -359,7 +360,7 @@ struct PolyCube
         Set set;
     };
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
-    unsigned m_hash = 0;
+    hash_t m_hash = 0;
     Cubes m_cubes;
 
     const Cells corona () const
@@ -393,7 +394,7 @@ struct PolyCube
     {
         return m_cubes.cmp (c.m_cubes) < 0;
     }
-    unsigned hash () const
+    hash_t hash () const
     {
         return m_hash;
     }
