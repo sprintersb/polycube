@@ -13,13 +13,12 @@ int main_polycube (int argc, char *argv[])
     if (argc > 3)   sscanf (argv[3], "%i", &way);
     if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
 
-    assert (way >= 0 && way <= 7);
-    assert (way != 5 && way != 1 && way != 2);
+    assert (way == 0 || way == 4);
 
     assert (dim == DIM);
 
-    std::vector<PolyCube::Set> set (1 + level);     // Way 0, 6, 7
-    std::vector<PolyCube::Vector> vset (1 + level); // Way 3, 4
+    std::vector<PolyCube::Set> set (1 + level);     // Way 0
+    std::vector<PolyCube::Vector> vset (1 + level); // Way 4
 
     for (int i = 1; i <= level; ++i)
     {
@@ -29,14 +28,6 @@ int main_polycube (int argc, char *argv[])
         {
             PolyCube pc1;
             pc1.add (Dim::zeros (dim));
-            if (way == 3)
-            {
-                // Index is corona size.
-                PolyCube::Vector v (1 + 2 * dim);
-                vset[1].swap (v);
-                assert (pc1.corona_size () == 2 * dim);
-                vset[1][2 * dim].set.emplace (pc1);
-            }
             if (way == 4)
             {
                 // Index is hash % n_pc.
@@ -49,34 +40,25 @@ int main_polycube (int argc, char *argv[])
         }
         else
         {
-            if (way == 6)
-                PolyCube::add_sprouts_6reduce (set[i], set[i - 1]);
-            else if (way == 7)
-                PolyCube::add_sprouts_7reduce (set[i], set[i - 1], n_pc);
-            else if (way == 3)
-                PolyCube::add_sprouts_way3 (dim, i, vset[i], vset[i - 1]);
-            else if (way == 4)
+            if (way == 4)
                 PolyCube::add_sprouts_way4 (n_pc, vset[i], vset[i - 1]);
-            else
+            else if (way == 0)
+            {
                 for (const auto &pc : set[i - 1])
-                {
                     if (way == 0) pc.add_sprouts (set[i]);
-                }
+            }
         }
 
         uint64_t ccount = -1;
         PolyCube::Poly poly;
 
-        if (way == 3 || way == 4)
+        if (way == 4)
         {
             int n_polycubes = 0;
             for (const auto &ms : vset[i])
                 n_polycubes += ms.set.size ();
             std::cout << (ccount = n_polycubes) << " polycubes\n";
-            if (way == 3)
-                poly = PolyCube::get_poly (vset[i]);
-            else if (way == 4)
-                poly = PolyCube::get_poly_way4 (vset[i]);
+            poly = PolyCube::get_poly_way4 (vset[i]);
         }
         else
         {
@@ -90,7 +72,7 @@ int main_polycube (int argc, char *argv[])
             assert ((int64_t) ccount == cube_count (dim, i)
                     && "verify polycube count");
     }
-    exit (0);
+    exit (0); // Faster that waiting for all them destructors.
 }
 
 
