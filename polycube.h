@@ -45,9 +45,11 @@ inline int64_t cube_count (int dim, int n_cells)
 
 class Dim;
 class Cells;
+class Cubes;
 class PolyCube;
 inline std::ostream& operator << (std::ostream&, Dim);
 inline std::ostream& operator << (std::ostream&, const Cells&);
+inline std::ostream& operator << (std::ostream&, const Cubes&);
 inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
 struct DimIterator;
@@ -181,6 +183,90 @@ inline DimIterator Dim::begin () const
     return DimIterator (d);
 }
 
+// Is a vect since that is most memory friendly.
+struct Cubes
+{
+    std::vector<Dim> cells;
+
+    int size () const
+    {
+        return cells.size ();
+    }
+    void add (Dim d)
+    {
+        cells.resize (1 + cells.size (), Dim{});
+
+        for (size_t i = 0; ; ++i)
+            if (i == cells.size () - 1)
+            {
+                cells[i] = d;
+                break;
+            }
+            else
+            {
+                const int c = d.cmp (cells[i]);
+                assert (c != 0 && "Assume we always increase cells");
+                if (c > 0)
+                    continue;
+                if (c < 0)
+                {
+                    for (size_t j = cells.size () - 1; j > i; --j)
+                        cells[j] = cells[j - 1];
+                    cells[i] = d;
+                }
+                break;
+            }
+    }
+    int cmp (const Cubes &c) const
+    {
+        auto &&p2 = c.cells.begin ();
+        auto &&e2 = c.cells.end ();
+        for (Dim d : cells)
+        {
+            if (p2 == e2)
+                return 1;
+            const int i = d.cmp (*p2);
+            if (i)
+                return i;
+            ++p2;
+        }
+        return p2 == e2 ? 0 : -1;
+    }
+    unsigned hash () const
+    {
+        unsigned h = 0;
+        for (Dim d : cells)
+            h = h * 13 + (Dim::int_t) d.v;
+        return h;
+    }
+    bool contains (Dim d) const
+    {
+        for (Dim c : cells)
+        {
+            const int i = c.cmp (d);
+            if (i == 0)
+                return true;
+            if (i > 0)
+                break;
+        }
+        return false;
+    }
+    void shift (int i, int off)
+    {
+        for (auto &c : cells)
+        {
+            if (i >= c.size ())
+            {
+                std::cout << "change " << i << " of " << c << "\n";
+                exit (1);
+            }
+            assert (i < c.size ());
+            c.v[i] += off;
+        }
+    }
+};
+
+
 struct Cells
 {
     std::list<Dim> cells;
@@ -303,7 +389,7 @@ struct PolyCube
     };
     using Vector = std::vector<MuxSet>; // Indexed by corona size.
     unsigned m_hash = 0;
-    Cells m_cubes;
+    Cubes m_cubes;
 
     const Cells corona () const
     {
@@ -590,6 +676,14 @@ inline std::ostream& operator << (std::ostream &ost, Dim d)
 }
 
 inline std::ostream& operator << (std::ostream &ost, const Cells &c)
+{
+    ost << "{#" << c.size ();
+    for (auto c : c.cells)
+        ost << " " << c;
+    return ost << " }";
+}
+
+inline std::ostream& operator << (std::ostream &ost, const Cubes &c)
 {
     ost << "{#" << c.size ();
     for (auto c : c.cells)
