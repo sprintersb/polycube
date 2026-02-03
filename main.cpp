@@ -41,7 +41,7 @@ int main_polycube (int argc, char *argv[])
         else
         {
             if (way == 4)
-                PolyCube::add_sprouts_way4 (n_pc, vset[i], vset[i - 1]);
+                PolyCube::add_sprouts_way4 (i, n_pc, vset[i], vset[i - 1]);
             else if (way == 0)
             {
                 for (const auto &pc : set[i - 1])
