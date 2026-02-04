@@ -1,19 +1,22 @@
 // -*- c++ -*-
+#include <utility> // std::move
+#include <iostream>
+#include <mutex>
+#include <atomic>
+// Containers
 #include <array>
 #include <list>
 #include <map>
 #include <vector>
 #include <set>
+#include <stack>
 #include <unordered_set>
-#include <utility> // std::move
-#include <iostream>
 #include <iterator>
-#include <mutex>
-#include <atomic>
-
+// C
 #include <cstdint>
 #include <cinttypes>
 #include <cassert>
+// Other
 #include <omp.h>
 
 inline int64_t cube_count (int dim, int n_cells)
@@ -150,6 +153,17 @@ struct Dim
 struct Box
 {
     Dim lo, hi;
+    bool contains (Dim d)
+    {
+        for (int i = 0; i < d.size (); ++i)
+            if (d.v[i] < lo.v[i] || d.v[i] > hi.v[i])
+                return false;
+        return true;
+    }
+    Box grow (int g) const
+    {
+        return Box { lo - Dim::all (g),  hi + Dim::all (g) };
+    }
 };
 
 
@@ -305,6 +319,10 @@ struct Corona
     {
         cells.erase (d);
     }
+    bool contains (Dim d) const
+    {
+        return cells.find (d) != cells.end ();
+    }
 };
 
 #define BACK "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
@@ -345,7 +363,11 @@ struct PolyCube
     hash_t m_hash = 0;
     Cubes m_cubes;
 
-    const Corona corona () const
+    bool contains (Dim d) const
+    {
+        return m_cubes.contains (d);
+    }
+    Corona corona () const
     {
         Corona cora;
         for (Dim d : m_cubes.cells)
@@ -354,9 +376,47 @@ struct PolyCube
                     cora.add (d + delta);
         return cora;
     }
-    int corona_size () const
+    Box bounding_box () const
     {
-        return corona ().size ();
+        return m_cubes.bounding_box ();
+    }
+
+private:
+    struct OuterCoronaFiller
+    {
+        const PolyCube &pc;
+        Box bbox;
+        Corona cora;
+        std::stack<Dim> pile;
+        OuterCoronaFiller (const PolyCube &pc)
+            : pc(pc), bbox(pc.bounding_box ().grow (1))
+        {}
+        Corona fill ()
+        {
+            for (spread (bbox.lo); ! pile.empty(); )
+            {
+                const Dim d = pile.top ();
+                pile.pop ();
+                if (! cora.contains (d))
+                {
+                    cora.add (d);
+                    for (Dim delta : d)
+                        spread (d + delta);
+                }
+            }
+            return cora;
+        }
+        void spread (Dim d)
+        {
+            if (bbox.contains (d) && ! cora.contains (d) && ! pc.contains (d))
+                pile.push (d);
+        }
+    };
+public:
+    // Outer shape is a rectangle, namely bounding_box.grow(1).
+    Corona outer_corona () const
+    {
+        return OuterCoronaFiller (*this).fill ();
     }
 
     void add (Dim d)
@@ -461,7 +521,7 @@ struct PolyCube
         {
             for (const auto &pc : set)
             {
-                const int coro = pc.corona_size ();
+                const int coro = pc.corona().size ();
                 const auto &monome = a_.find (coro);
                 if (monome == a_.end ())
                     a_[coro] = 1;

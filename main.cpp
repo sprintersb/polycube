@@ -71,8 +71,15 @@ int main_polycube (int argc, char *argv[])
         if (cube_count (dim, i) >= 0)
             assert ((int64_t) ccount == cube_count (dim, i)
                     && "verify polycube count");
+        if (0)
+            for (const auto &ms: vset[i])
+                for (const auto &pc : ms.set)
+                {
+                    std::cout << pc;
+                    std::cout << "outer: " << pc.outer_corona() << "\n";
+                }
     }
-    exit (0); // Faster that waiting for all them destructors.
+    exit (0); // Faster than waiting for all them destructors.
 }
 
 
