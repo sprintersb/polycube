@@ -46,12 +46,12 @@ inline int64_t cube_count (int dim, int n_cells)
 }
 
 class Dim;
-class Cells;
 class Cubes;
+class Corona;
 class PolyCube;
 inline std::ostream& operator << (std::ostream&, Dim);
-inline std::ostream& operator << (std::ostream&, const Cells&);
 inline std::ostream& operator << (std::ostream&, const Cubes&);
+inline std::ostream& operator << (std::ostream&, const Corona&);
 inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
 struct DimIterator;
@@ -86,9 +86,11 @@ struct Dim
     }
     Dim (const vector_t &v) : v(v) {}
 
-    static Dim zeros (int)
+    static Dim all (int w)
     {
         Dim d{};
+        for (int i = 0; i < d.size (); ++i)
+            d.v[i] = w;
         return d;
     }
     int size () const
@@ -118,9 +120,24 @@ struct Dim
     void operator -= (Dim d) { v -= d.v; }
     Dim operator + (Dim d) const { Dim s (*this); s += d; return s; }
     Dim operator - (Dim d) const { Dim s (*this); s -= d; return s; }
+    void min (Dim d)
+    {
+        for (int i = 0; i < size (); ++i)
+            v[i] = std::min (v[i], d.v[i]);
+    }
+    void max (Dim d)
+    {
+        for (int i = 0; i < size (); ++i)
+            v[i] = std::max (v[i], d.v[i]);
+    }
 
     DimIterator begin () const;
     DimIterator end () const;
+};
+
+struct Box
+{
+    Dim lo, hi;
 };
 
 
@@ -239,10 +256,21 @@ struct Cubes
             c.v[i] += off;
         }
     }
+
+    Box bounding_box () const
+    {
+        Box box { cells[0], cells[0] };
+        for (int i = 1; i < size (); ++i)
+        {
+            box.lo.min (cells[i]);
+            box.hi.max (cells[i]);
+        }
+        return box;
+    }
 };
 
 
-struct Cells
+struct Corona
 {
     std::list<Dim> cells;
 
@@ -280,7 +308,7 @@ struct Cells
                 break;
         }
     }
-    int cmp (const Cells &c) const
+    int cmp (const Corona &c) const
     {
         auto &&p2 = c.cells.begin ();
         auto &&e2 = c.cells.end ();
@@ -367,9 +395,9 @@ struct PolyCube
     hash_t m_hash = 0;
     Cubes m_cubes;
 
-    const Cells corona () const
+    const Corona corona () const
     {
-        Cells cora;
+        Corona cora;
         for (Dim d : m_cubes.cells)
             for (Dim delta : d)
                 if (! m_cubes.contains (d + delta))
@@ -582,7 +610,7 @@ inline std::ostream& operator << (std::ostream &ost, Dim d)
     return ost << '>';
 }
 
-inline std::ostream& operator << (std::ostream &ost, const Cells &c)
+inline std::ostream& operator << (std::ostream &ost, const Corona &c)
 {
     ost << "{#" << c.size ();
     for (auto c : c.cells)

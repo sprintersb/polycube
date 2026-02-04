@@ -27,7 +27,7 @@ int main_polycube (int argc, char *argv[])
         if (i == 1)
         {
             PolyCube pc1;
-            pc1.add (Dim::zeros (dim));
+            pc1.add (Dim::all (0));
             if (way == 4)
             {
                 // Index is hash % n_pc.
