@@ -130,6 +130,18 @@ struct Dim
         for (int i = 0; i < size (); ++i)
             v[i] = std::max (v[i], d.v[i]);
     }
+    hash_t hash () const
+    {
+        if (sizeof (int_t) <= sizeof (hash_t))
+            return (hash_t) (int_t) v;
+        else
+        {
+            hash_t h = 0;
+            for (int i = 0; i < size (); ++i)
+                h = 13 * h + (hash_t) v[i];
+            return h;
+        }
+    }
 
     DimIterator begin () const;
     DimIterator end () const;
@@ -228,7 +240,7 @@ struct Cubes
     {
         hash_t h = 0;
         for (Dim d : cells)
-            h = h * 13 + (hash_t) (Dim::int_t) d.v;
+            h = h * 13 + d.hash ();
         return h;
     }
     bool contains (Dim d) const
@@ -272,7 +284,14 @@ struct Cubes
 
 struct Corona
 {
-    std::list<Dim> cells;
+    struct DimHash
+    {
+        hash_t operator () (Dim d) const
+        {
+            return d.hash ();
+        }
+    };
+    std::unordered_set<Dim, DimHash> cells;
 
     int size () const
     {
@@ -280,80 +299,11 @@ struct Corona
     }
     void add (Dim d)
     {
-        const auto &end = cells.end ();
-        for (auto &&p = cells.begin(); ; ++p)
-            if (p == end)
-            {
-                cells.emplace (p, d);
-                break;
-            }
-            else
-            {
-                if (d > *p)
-                    continue;
-                if (d < *p)
-                    cells.emplace (p, d);
-                break;
-            }
+        cells.emplace (d);
     }
     void erase (Dim d)
     {
-        const auto &end = cells.end ();
-        for (auto &&p = cells.begin(); p != end; ++p)
-        {
-            const bool done = *p >= d;
-            if (*p == d)
-                cells.erase (p);
-            if (done)
-                break;
-        }
-    }
-    int cmp (const Corona &c) const
-    {
-        auto &&p2 = c.cells.begin ();
-        auto &&e2 = c.cells.end ();
-        for (Dim d : cells)
-        {
-            if (p2 == e2)
-                return 1;
-            const int i = d.cmp (*p2);
-            if (i)
-                return i;
-            ++p2;
-        }
-        return p2 == e2 ? 0 : -1;
-    }
-    hash_t hash () const
-    {
-        hash_t h = 0;
-        for (Dim d : cells)
-            h = h * 13 + (hash_t) (Dim::int_t) d.v;
-        return h;
-    }
-    bool contains (Dim d) const
-    {
-        for (Dim c : cells)
-        {
-            const int i = c.cmp (d);
-            if (i == 0)
-                return true;
-            if (i > 0)
-                break;
-        }
-        return false;
-    }
-    void shift (int i, int off)
-    {
-        for (auto &c : cells)
-        {
-            if (i >= c.size ())
-            {
-                std::cout << "change " << i << " of " << c << "\n";
-                exit (1);
-            }
-            assert (i < c.size ());
-            c.v[i] += off;
-        }
+        cells.erase (d);
     }
 };
 
