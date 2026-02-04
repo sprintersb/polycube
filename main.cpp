@@ -58,15 +58,15 @@ int main_polycube (int argc, char *argv[])
             for (const auto &ms : vset[i])
                 n_polycubes += ms.set.size ();
             std::cout << (ccount = n_polycubes) << " polycubes\n";
-            poly = PolyCube::get_poly_way4 (vset[i]);
+            poly = PolyCube::Poly (vset[i]);
         }
         else
         {
             std::cout << (ccount = set[i].size()) << " polycubes\n";
-            poly = PolyCube::get_poly (set[i]);
+            poly = PolyCube::Poly (set[i]);
         }
 
-        PolyCube::print_poly (i, poly, PolyCube::POLY_TEX);
+        poly.print (i, PolyCube::Poly::POLY_TEX);
 
         if (cube_count (dim, i) >= 0)
             assert ((int64_t) ccount == cube_count (dim, i)
