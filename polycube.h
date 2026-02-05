@@ -608,6 +608,25 @@ struct PolyCube
         Cubes c = m_cubes * i;
         return PolyCube { c, c.hash () };
     }
+    bool has_large_corona (int max_corona) const
+    {
+        const Corona &cora = corona ();
+        if (cora.size () > max_corona)
+            return true;
+        // Try some simple convexity tests.  Use an unordered_set for faster
+        // accesses.  Additional size doesn't matter here.
+        Corona cubs;
+        for (const auto &c : m_cubes.cells)
+            cubs.add (c);
+        for (Dim d : cora.cells)
+        {
+            if (cubs.contains (d + Dim{1,0}) && cubs.contains (d - Dim{1,0}))
+                return true;
+            if (cubs.contains (d + Dim{0,1}) && cubs.contains (d - Dim{0,1}))
+                return true;
+        }
+        return false; // Only weakly false, i.e. not necessarily convex.
+    }
     void add (Dim d)
     {
         m_cubes.add (d);
@@ -649,7 +668,7 @@ struct PolyCube
         {
             PolyCube pc (*this);
             pc.add (d);
-            if (max_corona > 0 && pc.corona().size() > max_corona)
+            if (max_corona > 0 && pc.has_large_corona (max_corona))
                 continue;
             MuxSet &slot = vms[pc.hash () % vms.size ()];
 
