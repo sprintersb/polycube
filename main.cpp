@@ -7,18 +7,22 @@ int main_polycube (int argc, char *argv[])
     int level = 10;
     int way = 0;
     int n_pc = 1;
+    int corona_margin = 0;
 
     if (argc > 1)   sscanf (argv[1], "%i", &dim);
     if (argc > 2)   sscanf (argv[2], "%i", &level);
     if (argc > 3)   sscanf (argv[3], "%i", &way);
     if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
+    if (argc > 5)   sscanf (argv[5], "%i", &corona_margin);
 
     assert (way == 0 || way == 4);
-
     assert (dim == DIM);
+
+    std::cout << "Max threads: " << omp_get_max_threads () << "\n";
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0
     std::vector<PolyCube::Vector> vset (1 + level); // Way 4
+    std::vector<int> smallest_corona (1 + level, 0);
 
     for (int i = 1; i <= level; ++i)
     {
@@ -40,8 +44,12 @@ int main_polycube (int argc, char *argv[])
         }
         else
         {
+            int max_corona = corona_margin > 0
+                ? corona_margin + smallest_corona[i - 1]
+                : -1;
             if (way == 4)
-                PolyCube::add_sprouts_way4 (i, n_pc, vset[i], vset[i - 1]);
+                PolyCube::add_sprouts_way4 (i, n_pc, vset[i], vset[i - 1],
+                                            max_corona);
             else if (way == 0)
             {
                 for (const auto &pc : set[i - 1])
@@ -57,26 +65,35 @@ int main_polycube (int argc, char *argv[])
             int n_polycubes = 0;
             for (const auto &ms : vset[i])
                 n_polycubes += ms.set.size ();
-            std::cout << (ccount = n_polycubes) << " polycubes\n";
+            ccount = n_polycubes;
             poly = PolyCube::Poly (vset[i]);
         }
         else
         {
-            std::cout << (ccount = set[i].size()) << " polycubes\n";
+            ccount = set[i].size();
             poly = PolyCube::Poly (set[i]);
         }
 
+        smallest_corona[i] = poly.a_.begin ()->first;
+        std::cout << ccount << " polycubes"
+                  << "  (coro min: " << smallest_corona[i] << ")\n";
         poly.print (i, PolyCube::Poly::POLY_TEX);
 
-        if (cube_count (dim, i) >= 0)
-            assert ((int64_t) ccount == cube_count (dim, i)
-                    && "verify polycube count");
-        if (0)
+        if (corona_margin <= 0)
+            if (cube_count (dim, i) >= 0)
+                assert ((int64_t) ccount == cube_count (dim, i)
+                        && "verify polycube count");
+
+        if (0 && i <= 3 && DIM == 2)
             for (const auto &ms: vset[i])
                 for (const auto &pc : ms.set)
                 {
-                    std::cout << pc;
-                    std::cout << "outer: " << pc.outer_corona() << "\n";
+                    auto &&ps = Cubes::BorderFinder (pc.m_cubes).border();
+                    for (const auto &pgon : ps)
+                    {
+                        std::cout << pgon;
+                        std::cout << pc.m_cubes.ascii ();
+                    }
                 }
     }
     exit (0); // Faster than waiting for all them destructors.
