@@ -652,16 +652,21 @@ struct PolyCube
     static Set find_min_corona (const Vector &vms)
     {
         Set set;
-        int corona_size = INT_MAX;
-        for (const auto &ms : vms)
-            for (const auto &pc : ms.set)
-                if (int csize = pc.corona ().size(); csize <= corona_size)
+        std::atomic<int> corona_size = INT_MAX;
+#pragma omp parallel for schedule(dynamic) // reduction(min: corona_size)
+        for (size_t j = 0; j < vms.size (); ++j)
+            for (const auto &pc : vms[j].set)
+            {
+                int csize = pc.corona ().size();
+#pragma omp critical
+                if (csize <= corona_size)
                 {
                     if (csize < corona_size)
                         set.clear ();
                     corona_size = csize;
                     set.insert (pc);
                 }
+            }
         return set;
     }
 
