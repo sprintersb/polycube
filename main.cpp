@@ -59,6 +59,7 @@ int main_polycube (int argc, char *argv[])
 
         uint64_t ccount = -1;
         PolyCube::Poly poly;
+        PolyCube::Set small_corona = PolyCube::find_min_corona (vset[i]);
 
         if (way == 4)
         {
@@ -78,6 +79,8 @@ int main_polycube (int argc, char *argv[])
         std::cout << ccount << " polycubes"
                   << "  (coro min: " << smallest_corona[i] << ")\n";
         poly.print (i, PolyCube::Poly::POLY_TEX);
+        if (! small_corona.empty ())
+            std::cout << small_corona.begin()->m_cubes.ascii ();
 
         if (corona_margin <= 0)
             if (cube_count (dim, i) >= 0)

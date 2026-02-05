@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cinttypes>
 #include <cassert>
+#include <climits>
 // Other
 #include <omp.h>
 // Own
@@ -647,6 +648,21 @@ struct PolyCube
     hash_t hash () const
     {
         return m_hash;
+    }
+    static Set find_min_corona (const Vector &vms)
+    {
+        Set set;
+        int corona_size = INT_MAX;
+        for (const auto &ms : vms)
+            for (const auto &pc : ms.set)
+                if (int csize = pc.corona ().size(); csize <= corona_size)
+                {
+                    if (csize < corona_size)
+                        set.clear ();
+                    corona_size = csize;
+                    set.insert (pc);
+                }
+        return set;
     }
 
     // Way 0
