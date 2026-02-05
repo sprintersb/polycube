@@ -3,14 +3,16 @@
 #include <iostream>
 #include <mutex>
 #include <atomic>
+#include <string>
+#include <sstream>
 // Containers
 #include <array>
 #include <list>
 #include <map>
 #include <vector>
 #include <set>
-#include <stack>
 #include <unordered_set>
+#include <unordered_map>
 #include <iterator>
 // C
 #include <cstdint>
@@ -18,35 +20,8 @@
 #include <cassert>
 // Other
 #include <omp.h>
-
-inline int64_t cube_count (int dim, int n_cells)
-{
-    static const std::array<std::vector<int64_t>, 4 + 1> cube_counts =
-    {
-        {
-            {},
-            {},
-            // n = 2: https://oeis.org/A001168
-            { 1, 1, 2, 6, 19, 63, 216, 760, 2725, 9910, 36446, 135268, 505861,
-              1903890, 7204874, 27394666, 104592937, 400795844, 1540820542,
-              5940738676, 22964779660, 88983512783, 345532572678, 1344372335524,
-              5239988770268, 20457802016011 },
-            // n = 3: https://oeis.org/A001931
-            { 1, 1, 3, 15, 86, 534, 3481, 23502, 162913, 1152870, 8294738,
-              60494549, 446205905, 3322769321, 24946773111, 188625900446,
-              1435074454755, 10977812452428, 84384157287999, 651459315795897,
-              5049008190434659, 39269513463794006, 306405169166373418 },
-            // n = 4: https://oeis.org/A151830
-            { 1, 1, 4, 28, 234, 2162, 21272, 218740, 2323730, 25314097,
-              281345096, 3178474308, 36400646766, 421693622520, 4933625049464,
-              58216226287844, 692095652493483 }
-        }
-    };
-    return ((size_t) dim < cube_counts.size ()
-            && (size_t) n_cells < cube_counts[dim].size ())
-        ? cube_counts[dim][n_cells]
-        : -1;
-}
+// Own
+#include "polycube-count.h"
 
 class Dim;
 class Cubes;
@@ -73,7 +48,8 @@ struct Dim
     using vector_t = value_t __attribute__((vector_size(8)));
     using int_t = uint64_t;
 #else
-#error DIM=?
+    using vector_t = value_t __attribute__((vector_size(16)));
+    using int_t = unsigned __int128;
 #endif
 
     vector_t v = (vector_t) (int_t) 0;
@@ -121,8 +97,19 @@ struct Dim
     bool operator >  (Dim d) const { return cmp (d) >  0; }
     void operator += (Dim d) { v += d.v; }
     void operator -= (Dim d) { v -= d.v; }
-    Dim operator + (Dim d) const { Dim s (*this); s += d; return s; }
-    Dim operator - (Dim d) const { Dim s (*this); s -= d; return s; }
+    void operator *= (int i) { v *= (value_t) i; }
+    Dim operator + (Dim d) const { return Dim (v + d.v); }
+    Dim operator - (Dim d) const { return Dim (v - d.v); }
+    Dim operator * (int i) const { return Dim (v * (value_t) i); }
+    int operator % (Dim d) const { return v[0] * d[1] - v[1] * d[0]; }
+    Dim rot (int i /* Left in units of 90 deg */) const
+    {
+        Dim d (*this);
+        i = (4 + (i % 4)) % 4;
+        while (i-- > 0)
+            d = Dim { (value_t) -d.v[1], d.v[0] };
+        return d;
+    }
     void min (Dim d)
     {
         for (int i = 0; i < size (); ++i)
@@ -145,6 +132,13 @@ struct Dim
             return h;
         }
     }
+    struct Hash
+    {
+        hash_t operator () (Dim d) const
+        {
+            return d.hash ();
+        }
+    };
 
     DimIterator begin () const;
     DimIterator end () const;
@@ -212,28 +206,24 @@ struct Cubes
     }
     void add (Dim d)
     {
-        cells.resize (1 + cells.size (), Dim{});
-
-        for (size_t i = 0; ; ++i)
-            if (i == cells.size () - 1)
+        for (auto it = cells.begin (); ; ++it)
+        {
+            int i;
+            if (it == cells.end () || (i = d.cmp (*it)) < 0)
             {
-                cells[i] = d;
+                cells.insert (it, d);
                 break;
             }
-            else
-            {
-                const int c = d.cmp (cells[i]);
-                assert (c != 0 && "Assume we always increase cells");
-                if (c > 0)
-                    continue;
-                if (c < 0)
-                {
-                    for (size_t j = cells.size () - 1; j > i; --j)
-                        cells[j] = cells[j - 1];
-                    cells[i] = d;
-                }
-                break;
-            }
+            if (i == 0)
+                assert (i != 0 && "Assume we always increase cells");
+        }
+    }
+    Cubes operator * (int i) const
+    {
+        Cubes c { *this };
+        for (Dim &d : c.cells)
+            d *= i;
+        return c;
     }
     int cmp (const Cubes &c) const
     {
@@ -273,11 +263,6 @@ struct Cubes
     {
         for (auto &c : cells)
         {
-            if (i >= c.size ())
-            {
-                std::cout << "change " << i << " of " << c << "\n";
-                exit (1);
-            }
             assert (i < c.size ());
             c.v[i] += off;
         }
@@ -293,19 +278,249 @@ struct Cubes
         }
         return box;
     }
+
+    //////////////////////////////////////////////////////////////////////////
+    // Lines are only used in dimension 2, so they occupy only 4 bytes.
+    // Hence pass them as objects and not as const Line&.
+    struct Line
+    {
+        Dim a, b;
+        bool operator == (Line l) const
+        {
+            return a == l.a && b == l.b;
+        }
+        struct Hash
+        {
+            hash_t operator () (Line l) const
+            {
+                return l.a.hash() + 13 * l.b.hash();
+            }
+        };
+        struct SymmetricHash
+        {
+            hash_t operator () (Line l) const
+            {
+                return l.a.hash() + l.b.hash();
+            }
+        };
+        struct SymmetricEQ
+        {
+            bool operator () (Line g, Line h) const
+            {
+                return g == h || (g.a == h.b && g.b == h.a);
+            }
+        };
+        friend std::ostream& operator << (std::ostream &ost, Line l);
+    };
+    struct Polygon : public std::list<Dim>
+    {
+        std::string svg (bool rel = 1) const
+        {
+            std::stringstream ss;
+            Dim from{};
+            const Dim O;
+            bool start = true;
+            for (const Dim d : *this)
+            {
+                if (start)
+                {
+                    ss << "M" << d[0] << " " << d[1];
+                    start = false;
+                }
+                else if ((d - from)[0] == 0)
+                    ss << "Vv"[rel] << (d - (rel ? from : O))[1];
+                else if ((d - from)[1] == 0)
+                    ss << "Hh"[rel] << (d - (rel ? from : O))[0];
+                else
+                    assert (0);
+                from = d;
+            }
+            ss << "Zz"[rel];
+            return ss.str ();
+        }
+        void push (Dim d, bool tidy)
+        {
+            if (auto p0 = rbegin (); tidy && p0 != rend ())
+                if (auto p1 = p0; ++p1 != rend ())
+                {
+                    Dim d1 = *p0 - *p1;
+                    Dim d2 = d - *p0;
+                    if (d1[0] == 0 && d2[0] == 0)
+                    {
+                        p0->v[1] = d[1];
+                        return;
+                    }
+                    else if (d1[1] == 0 && d2[1] == 0)
+                    {
+                        p0->v[0] = d[0];
+                        return;
+                    }
+                }
+            push_back (d);
+        }
+        friend std::ostream& operator << (std::ostream&, const Polygon&);
+    };
+    using Polygons = std::vector<Polygon>;
+
+    struct BorderFinder
+    {
+        struct LinePool
+        {
+            using LineBucket = std::unordered_set
+                <Line, Line::SymmetricHash, Line::SymmetricEQ>;
+            std::unordered_map<Dim, LineBucket, Dim::Hash> bucks;
+            void operator += (Line l)
+            {
+                add (l.a, l);
+                add (l.b, l);
+            }
+            int operator -= (Line l)
+            {
+                bool killa = sub(l.a, l);
+                bool killb = sub(l.b, l);
+                return killa + killb;
+            }
+            void add (Dim d, Line l)
+            {
+                if (auto &&b = bucks.find (d); b == bucks.end ())
+                    bucks[d] = LineBucket { l };
+                else
+                    b->second.emplace (l);
+            }
+            bool sub (Dim d, Line l)
+            {
+                if (auto &&b = bucks.find (d); b == bucks.end ())
+                    return false;
+                else
+                {
+                    const bool erased = b->second.erase (l);
+                    if (b->second.empty ())
+                        bucks.erase (d);
+                    return erased;
+                }
+            }
+            const LineBucket* get (Dim d) const
+            {
+                auto &&b = bucks.find (d);
+                return b == bucks.end () ? nullptr : & b->second;
+            }
+            bool contains (Line line) const
+            {
+                const LineBucket *buck = get (line.a);
+                return buck && buck->find (line) != buck->end ();
+            }
+            friend std::ostream& operator << (std::ostream&, const LinePool&);
+        }; // LinePool
+
+        const Cubes &cs;
+        LinePool pool;
+        Polygons polygons;
+
+        BorderFinder (const Cubes &cs)
+            : cs(cs)
+        {
+            assert (DIM == 2);
+            // Collect all border line segments in pool.
+            for (Dim p : cs.cells)
+                for (Dim d : p)
+                    if (! cs.contains (p + d))
+                    {
+                        // P+d is in corona.  Determine unoriented line
+                        // segment between P and P+d.
+                        Dim off = Dim { d[0] + d[1] > 0, d[1] > d[0] };
+                        pool += Line { p + off, p + off + d.rot(1) };
+                    }
+        }
+        enum Orient { Left = 1, Right = -1 };
+        Line get_start (bool outer) const
+        {
+            if (outer)
+            {
+                for (Dim p : cs.cells)
+                    if (p[1] == 0)
+                        return { p, p + Dim{1,0} };
+            }
+            else
+                for (Dim p : cs.cells)
+                    for (Dim::value_t dy = 0; dy <= 1; ++dy)
+                    {
+                        const Dim a = p + Dim { 0, dy };
+                        const Dim b = a + Dim { 1, 0 };
+                        Line line { dy ? b : a, dy ? a : b };
+                        if (pool.contains (line))
+                            return line;
+                    }
+            assert (0);
+        }
+        Polygon get_polygon (bool outer, bool tidy)
+        {
+            Polygon polygon;
+            const Line start = get_start (outer);
+            Orient orient = start.b[0] > start.a[0] ? Left : Right;
+            Dim p2{};
+            for (Line line = start; ; line = Line { line.b, p2 })
+            {
+                polygon.push (line.a, tidy);
+                assert (2 == (pool -= line));
+                if (line.b == start.a)
+                    break;
+
+                // Iterate over all pool lines that start / end at line.b.
+                const LinePool::LineBucket *buck = pool.get (line.b);
+                assert (buck && ! buck->empty ());
+                const Dim dir = line.b - line.a;
+                int sin_angle = -100;
+                for (Line l : *buck)
+                {
+                    if (l.a != line.b)
+                        std::swap (l.a, l.b);
+                    assert (l.a == line.b);
+                    const int sina = (dir % (l.b - l.a)) * orient;
+                    // > makes the outer border greedy, < makes it reluctant.
+                    if (sina > sin_angle)
+                        p2 = l.b, sin_angle = sina;
+                }
+                assert (sin_angle >= -1 && sin_angle <= 1);
+            }
+            polygon.push (start.a, tidy);
+            return polygon;
+        }
+        // Return a vector of Polygons that represent the border of the
+        // Cubes.  The first polygon is the outer border and maybe more.
+        // The rest represent (parts of) the inner border and is optional.
+        Polygons border (bool tidy = 1)
+        {
+            for (bool outer = 1; ! pool.bucks.empty (); outer = 0)
+                polygons.push_back (get_polygon (outer, tidy));
+            assert (polygons.size () >= 1);
+            return polygons;
+        }
+    };
+    //////////////////////////////////////////////////////////////////////////
+
+    std::string ascii (char c = '*') const
+    {
+#if DIM == 2
+        auto bbox = bounding_box ();
+        std::string str;
+        for (Dim::value_t y = bbox.hi[1]; y >= bbox.lo[1]; --y)
+        {
+            for (Dim::value_t x = bbox.lo[0]; x <= bbox.hi[0]; ++x)
+                str += contains (Dim { x, y }) ? c : ' ';
+            str += "\n";
+        }
+        return str;
+#else
+        (void) c;
+        return "Cubes.ascii(DIM != 2)";
+#endif
+    }
 };
 
 
 struct Corona
 {
-    struct DimHash
-    {
-        hash_t operator () (Dim d) const
-        {
-            return d.hash ();
-        }
-    };
-    std::unordered_set<Dim, DimHash> cells;
+    std::unordered_set<Dim, Dim::Hash> cells;
 
     int size () const
     {
@@ -323,9 +538,17 @@ struct Corona
     {
         return cells.find (d) != cells.end ();
     }
+    Corona operator * (int i) const
+    {
+        Corona c;
+        for (Dim d : cells)
+            c.add (d * i);
+        return c;
+    }
 };
 
 #define BACK "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+
 
 struct PolyCube
 {
@@ -359,9 +582,9 @@ struct PolyCube
         std::mutex mux;
         Set set;
     };
-    using Vector = std::vector<MuxSet>; // Indexed by corona size.
-    hash_t m_hash = 0;
+    using Vector = std::vector<MuxSet>;
     Cubes m_cubes;
+    hash_t m_hash = 0;
 
     bool contains (Dim d) const
     {
@@ -380,45 +603,11 @@ struct PolyCube
     {
         return m_cubes.bounding_box ();
     }
-
-private:
-    struct OuterCoronaFiller
+    PolyCube operator * (int i) const
     {
-        const PolyCube &pc;
-        Box bbox;
-        Corona cora;
-        std::stack<Dim> pile;
-        OuterCoronaFiller (const PolyCube &pc)
-            : pc(pc), bbox(pc.bounding_box ().grow (1))
-        {}
-        Corona fill ()
-        {
-            for (spread (bbox.lo); ! pile.empty(); )
-            {
-                const Dim d = pile.top ();
-                pile.pop ();
-                if (! cora.contains (d))
-                {
-                    cora.add (d);
-                    for (Dim delta : d)
-                        spread (d + delta);
-                }
-            }
-            return cora;
-        }
-        void spread (Dim d)
-        {
-            if (bbox.contains (d) && ! cora.contains (d) && ! pc.contains (d))
-                pile.push (d);
-        }
-    };
-public:
-    // Outer shape is a rectangle, namely bounding_box.grow(1).
-    Corona outer_corona () const
-    {
-        return OuterCoronaFiller (*this).fill ();
+        Cubes c = m_cubes * i;
+        return PolyCube { c, c.hash () };
     }
-
     void add (Dim d)
     {
         m_cubes.add (d);
@@ -453,13 +642,15 @@ public:
     }
 
     // Way 4
-    int add_sprouts_way4 (Vector &vms) const
+    int add_sprouts_way4 (Vector &vms, int max_corona) const
     {
         int new_count = 0;
         for (Dim d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
+            if (max_corona > 0 && pc.corona().size() > max_corona)
+                continue;
             MuxSet &slot = vms[pc.hash () % vms.size ()];
 
             slot.mux.lock ();
@@ -473,7 +664,8 @@ public:
 
     // Way 4
     static void add_sprouts_way4 (int n_cells, int n_slots,
-                                  Vector &vset2, const Vector &vset)
+                                  Vector &vset2, const Vector &vset,
+                                  int max_corona = -1)
     {
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex
@@ -487,7 +679,7 @@ public:
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
-                pc_count += pc.add_sprouts_way4 (vset2);
+                pc_count += pc.add_sprouts_way4 (vset2, max_corona);
 
             // Print stat.
             if (omp_get_thread_num () == 0)
@@ -634,4 +826,30 @@ inline std::ostream& operator << (std::ostream &ost, const Cubes &c)
     for (auto c : c.cells)
         ost << " " << c;
     return ost << " }";
+}
+
+inline std::ostream& operator << (std::ostream &ost, Cubes::Line l)
+{
+    return ost << l.a << "--" << l.b;
+}
+
+inline std::ostream& operator << (std::ostream &ost,
+                                  const Cubes::BorderFinder::LinePool &lp)
+{
+    for (const auto& b : lp.bucks)
+    {
+        ost << b.first << ":";
+        for (auto l : b.second)
+            ost << "  " << l;
+        ost << "\n";
+    }
+    return ost;
+}
+
+inline std::ostream& operator << (std::ostream &ost, const Cubes::Polygon &pg)
+{
+    ost << "Polygon: ";
+    for (Dim p : pg)
+        ost << " " << p;
+    return ost << "\n";
 }
