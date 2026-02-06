@@ -144,12 +144,18 @@ struct Dim
     Dim operator - (Dim d) const { Dim s (*this); s -= d; return s; }
 
     // Don't use (int_t) since PolyCube wants a symmetric hash, but we want
-    // Dim{a,b} ^ Dim{c,d} != Dim{a,d} ^ Dim{c,b}.
+    // Dim{a,b} ^ Dim{c,d} != Dim{a,d} ^ Dim{c,b}. // The below hash works
+    // well, i.e. we almost never get PolyCube == returns false.
     hash_t hash () const
     {
-        hash_t h = 0;
+        hash_t h = 1;
         for (int i = 0; i < size (); ++i)
-            h = h * 13 + v[i];
+        {
+            hash_t w0 = v[i] + 20, w = 1;
+            for (int j = 0; j < i + 2; ++j)
+                w *= w0;
+            h = 97 + h * w;
+        }
         return h;
     }
 
@@ -366,7 +372,7 @@ struct PolyCube
         const Dim d = min_cube ();
         hash_t h = 0;
         for (auto p = this; p; p = p->m_dad)
-            h ^= (p->m_cube - d).hash ();
+            h += (p->m_cube - d).hash ();
         return h;
     }
     hash_t hash () const
