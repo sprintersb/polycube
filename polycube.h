@@ -23,6 +23,7 @@
 #include <omp.h>
 // Own
 #include "polycube-count.h"
+#include "progress.h"
 
 #if defined(CUBES_ARRAY) && !defined(CELLS)
 #error CELLS=?
@@ -634,8 +635,6 @@ struct Corona
     }
 };
 
-#define BACK "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
-
 
 struct PolyCube
 {
@@ -799,7 +798,8 @@ struct PolyCube
         // Only for printing stat.
         const int64_t n_cubes = cube_count (DIM, n_cells);
         std::atomic<int64_t> pc_count = 0;
-        int64_t pc_show = pc_count;
+        Progress<int64_t> pro (PROGRESS_WITH_TOTAL, n_cubes, 100000,
+                               "%" PRIi64 " Cubs = %.1f%%");
 
 #pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vset.size (); ++j)
@@ -809,21 +809,8 @@ struct PolyCube
 
             // Print stat.
             if (omp_get_thread_num () == 0)
-            {
-                const int64_t pcs = pc_count;
-                if (pc_show == 0 || pcs - pc_show > 100000)
-                {
-                    pc_show = pcs;
-                    printf ("%s%" PRIi64 " Cubs", BACK, pcs);
-                    if (n_cubes > 1)
-                        printf (" = %.1f%%", 100.0 * pcs / n_cubes);
-                    fflush (stdout);
-                }
-            } // master
+                pro.update (pc_count);
         } // parallel for
-
-        printf ("%s                                    %s%s", BACK, BACK, BACK);
-        fflush (stdout);
     }
 
     // Univariate polynomial over Z in sparse representation.
