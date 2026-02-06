@@ -6,14 +6,12 @@ int main_polycube (int argc, char *argv[])
     int dim = 2;
     int level = 10;
     int way = 0;
-    int n_pc = 1;
     int corona_margin = 0;
 
     if (argc > 1)   sscanf (argv[1], "%i", &dim);
     if (argc > 2)   sscanf (argv[2], "%i", &level);
     if (argc > 3)   sscanf (argv[3], "%i", &way);
-    if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
-    if (argc > 5)   sscanf (argv[5], "%i", &corona_margin);
+    if (argc > 4)   sscanf (argv[4], "%i", &corona_margin);
 
     assert (way == 0 || way == 4);
     assert (dim == DIM);
@@ -21,7 +19,13 @@ int main_polycube (int argc, char *argv[])
     assert (level == CELLS);
 #endif
 
-    std::cout << "Max threads: " << omp_get_max_threads () << "\n";
+    const int max_threads = omp_get_max_threads ();
+    std::cout << "Max threads: " << max_threads << "\n";
+
+    // See birthday paradox.
+    const double p_slow_collide = 0.2;
+    const int n_slots = (int) (max_threads * max_threads / 2 / p_slow_collide);
+    std::cout << "Slots      : " << n_slots << "\n";
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0
     std::vector<PolyCube::Vector> vset (1 + level); // Way 4
@@ -37,10 +41,10 @@ int main_polycube (int argc, char *argv[])
             pc1.add (Dim::all (0));
             if (way == 4)
             {
-                // Index is hash % n_pc.
-                PolyCube::Vector v (n_pc);
+                // Index is hash % n_slots.
+                PolyCube::Vector v (n_slots);
                 vset[1].swap (v);
-                vset[1][pc1.hash () % n_pc].set.emplace (pc1);
+                vset[1][pc1.hash () % n_slots].set.emplace (pc1);
             }
             else
                 set[1].emplace (pc1);
@@ -51,7 +55,7 @@ int main_polycube (int argc, char *argv[])
                 ? corona_margin + smallest_corona[i - 1]
                 : -1;
             if (way == 4)
-                PolyCube::add_sprouts_way4 (i, n_pc, vset[i], vset[i - 1],
+                PolyCube::add_sprouts_way4 (i, n_slots, vset[i], vset[i - 1],
                                             max_corona);
             else if (way == 0)
             {
