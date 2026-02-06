@@ -406,42 +406,6 @@ struct PolyCube
             set.emplace (PolyCube (this, d));
     }
 
-    // Way 3
-    void add_sprouts_way3 (Vector &vms) const
-    {
-        for (Dim d : corona())
-        {
-            auto &&pc = PolyCube (this, d);
-            auto &slot = vms[pc.corona_size ()];
-            slot.mux.lock ();
-            slot.set.emplace (pc);
-            slot.mux.unlock ();
-        }
-    }
-
-    // Way 3
-    static void add_sprouts_way3 (int dim, int n,
-                                  Vector &vset2, const Vector &vset)
-    {
-        assert (n >= 2 && dim >= 1);
-        const int max_corona_size = 2 * (dim - 1) * n + 2;
-
-        Vector v (1 + max_corona_size);
-        vset2.swap (v); // Since resize() doesn't like std::mutex.
-
-        size_t n_polycubes = 0;
-        for (const auto &ms : vset)
-            n_polycubes += ms.set.size ();
-        std::vector<const PolyCube*> vpc (n_polycubes);
-        int j = 0;
-        for (const auto &ms : vset)
-            for (const auto &pc : ms.set)
-                vpc[j++] = &pc;
-#pragma omp parallel for schedule(runtime)
-        for (size_t j = 0; j < vpc.size (); ++j)
-            vpc[j]->add_sprouts_way3 (vset2);
-    }
-
     // Way 4
     void add_sprouts_way4 (Vector &vms) const
     {
@@ -462,66 +426,11 @@ struct PolyCube
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex.
 
-#pragma omp parallel for schedule(runtime)
+#pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
                 pc.add_sprouts_way4 (vset2);
-        }
-    }
-
-    // Way 6, 7
-    void add_sprouts_merge (Set &set) const
-    {
-        for (Dim d : corona())
-            PolyCube::merge (set, PolyCube (this, d));
-    }
-
-    // Way 6
-    static void add_sprouts_6reduce (Set &set2, const Set &set)
-    {
-        std::vector<const PolyCube*> pc;
-        pc.resize (set.size ());
-        int j = 0;
-        for (const auto &p : set)
-            pc[j++] = &p;
-
-#pragma omp parallel for schedule(runtime)
-        for (size_t j = 0; j < pc.size (); ++j)
-        {
-            Set s;
-            pc[j]->add_sprouts_merge (s);
-#pragma omp critical
-            PolyCube::merge (set2, s);
-        }
-    }
-
-    // Way 7
-    static void add_sprouts_7reduce (Set &set2, const Set &set, int n_pc)
-    {
-        std::vector<const PolyCube*> pc;
-        pc.resize (set.size ());
-        int j = 0;
-        for (const auto &p : set)
-            pc[j++] = &p;
-
-        int dim = set.begin() -> m_cube.size ();
-        int n_cells = 1 + (int) set.begin () -> cube_count ();
-        const int64_t n_cubes = ::cube_count (dim, n_cells);
-#pragma omp parallel for schedule(runtime)
-        for (size_t j = 0; j < pc.size (); j += n_pc)
-        {
-            Set s;
-            bool done = false;
-            for (int k = 0; k < n_pc && !done; ++k)
-                if (j + k < pc.size ())
-                    pc[j + k]->add_sprouts_merge (s);
-#pragma omp critical
-            {
-                PolyCube::merge (set2, s);
-                if (n_cubes > 1 && n_cubes == (int64_t) set2.size ())
-                    done = true;
-            }
         }
     }
 
