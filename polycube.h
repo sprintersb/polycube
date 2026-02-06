@@ -24,6 +24,10 @@
 // Own
 #include "polycube-count.h"
 
+#if defined(CUBES_ARRAY) && !defined(CELLS)
+#error CELLS=?
+#endif
+
 class Dim;
 class Cubes;
 class Corona;
@@ -76,6 +80,17 @@ struct Dim
     int size () const
     {
         return DIM;
+    }
+    void set (int i, int val)
+    {
+#ifdef CUBES_ARRAY
+        // v[i] = Gives warning with CUBES_ARRAY.
+        vector_t w(v);
+        w[i] = (Dim::value_t) val;
+        v = w;
+#else
+        v[i] = (Dim::value_t) val;
+#endif
     }
     int operator [] (int i) const
     {
@@ -197,9 +212,80 @@ inline DimIterator Dim::end ()   const { return DimIterator (2 * DIM); }
 
 
 // Is a vect since that is most memory friendly.
+
+class DimArray
+{
+    std::array<Dim, 1 + CELLS> a_;
+public:
+    Dim operator [] (int i) const
+    {
+        return a_[i];
+    }
+    /*Dim& operator [] (int i)
+    {
+        return a_[i];
+        }*/
+    int size () const
+    {
+        int sz = (int) (Dim::int_t) a_[CELLS].v;
+        assert (sz >= 0 && sz <= CELLS);
+        return sz;
+    }
+    struct Iterator
+    {
+        friend DimArray;
+        void operator ++ () { ++ptr; };
+        bool operator == (const Iterator &i) const { return ptr == i.ptr; }
+        bool operator != (const Iterator &i) const { return ptr != i.ptr; }
+        Dim& operator * () { return *ptr; }
+    private:
+        Dim *ptr;
+        Iterator () = delete;
+        Iterator (Dim *ptr) : ptr(ptr) {}
+    };
+    struct CIterator
+    {
+        friend DimArray;
+        void operator ++ () { ++ptr; };
+        bool operator == (const CIterator &i) const { return ptr == i.ptr; }
+        bool operator != (const CIterator &i) const { return ptr != i.ptr; }
+        const Dim& operator * () { return *ptr; }
+    private:
+        const Dim *ptr;
+        CIterator () = delete;
+        CIterator (const Dim *ptr) : ptr(ptr) {}
+    };
+    Iterator begin () { return Iterator (&a_[0]); }
+    Iterator end ()   { return Iterator (&a_[size ()]); }
+    CIterator begin () const { return CIterator (&a_[0]); }
+    CIterator end ()   const { return CIterator (&a_[size ()]); }
+    void insert (Iterator &it, Dim d)
+    {
+        const int pos = (int) (& (*it) - & a_[0]);
+        //std::cout << "insert(" << pos << "/" << size () << ")";
+        //std::cout.flush();
+        assert (pos >= 0 && pos <= size ());
+        for (int i = size (); i > pos; --i)
+            a_[i] = a_[i - 1];
+        a_[pos] = d;
+        set_size (1 + size ());
+    }
+
+private:
+    void set_size (int sz)
+    {
+        assert (sz >= 0 && sz <= CELLS);
+        a_[CELLS].v = (Dim::vector_t) (Dim::int_t) sz;
+    }
+};
+
 struct Cubes
 {
+#ifdef CUBES_ARRAY
+    DimArray cells;
+#else
     std::vector<Dim> cells;
+#endif
 
     int size () const
     {
@@ -265,7 +351,7 @@ struct Cubes
         for (auto &c : cells)
         {
             assert (i < c.size ());
-            c.v[i] += off;
+            c.set (i, c[i] + off);
         }
     }
 
