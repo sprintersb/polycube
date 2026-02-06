@@ -39,7 +39,7 @@ int main_polycube (int argc, char *argv[])
         else
         {
             if (way == 4)
-                PolyCube::add_sprouts_way4 (n_pc, vset[i], vset[i - 1]);
+                PolyCube::add_sprouts_way4 (dim, i, n_pc, vset[i], vset[i - 1]);
             else if (way == 0)
             {
                 for (const auto &pc : set[i - 1])
@@ -50,24 +50,23 @@ int main_polycube (int argc, char *argv[])
         uint64_t ccount = -1;
         PolyCube::Poly poly;
 
-        if (way == 3 || way == 4)
+        if (way == 4)
         {
             int n_polycubes = 0;
             for (const auto &ms : vset[i])
                 n_polycubes += ms.set.size ();
-            std::cout << (ccount = n_polycubes) << " polycubes\n";
-            if (way == 3)
-                poly = PolyCube::get_poly (vset[i]);
-            else if (way == 4)
-                poly = PolyCube::get_poly_way4 (vset[i]);
+            ccount = n_polycubes;
+            poly = PolyCube::Poly (vset[i]);
         }
         else
         {
-            std::cout << (ccount = set[i].size()) << " polycubes\n";
-            poly = PolyCube::get_poly (set[i]);
+            ccount = set[i].size();
+            poly = PolyCube::Poly (set[i]);
         }
 
-        PolyCube::print_poly (i, poly, PolyCube::POLY_TEX);
+        std::cout << ccount << " polycubes\n";
+        poly.print (i, PolyCube::Poly::POLY_TEX);
+        std::cout.flush();
 
         if (cube_count (dim, i) >= 0)
             assert ((int64_t) ccount == cube_count (dim, i)

@@ -9,7 +9,8 @@
 #include <iostream>
 #include <iterator>
 #include <mutex>
-
+#include <atomic>
+#include <cinttypes>
 #include <cstdint>
 #include <cassert>
 #include <omp.h>
@@ -269,6 +270,9 @@ struct Cells
     }
 };
 
+#define BACK "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+
+
 struct PolyCube
 {
     struct Hash
@@ -407,126 +411,152 @@ struct PolyCube
     }
 
     // Way 4
-    void add_sprouts_way4 (Vector &vms) const
+    int add_sprouts_way4 (Vector &vms) const
     {
+        int new_count = 0;
         for (Dim d : corona())
         {
             auto &&pc = PolyCube (this, d);
             MuxSet &slot = vms[pc.hash () % vms.size ()];
             slot.mux.lock ();
+            const auto n = slot.set.size ();
             slot.set.emplace (pc);
+            new_count += n != slot.set.size ();
             slot.mux.unlock ();
         }
+        return new_count;
     }
 
     // Way 4
-    static void add_sprouts_way4 (int n_slots,
+    static void add_sprouts_way4 (int dim, int n_cells, int n_slots,
                                   Vector &vset2, const Vector &vset)
     {
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex.
 
+        // Only for printing stat.
+        const int64_t n_cubes = ::cube_count (dim, n_cells);
+        std::atomic<int64_t> pc_count = 0;
+        int64_t pc_show = pc_count;
+
 #pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
-                pc.add_sprouts_way4 (vset2);
-        }
+                pc_count += pc.add_sprouts_way4 (vset2);
+
+            // Print stat.
+            if (omp_get_thread_num () == 0)
+            {
+                const int64_t pcs = pc_count;
+                if (pc_show == 0 || pcs - pc_show > 50000)
+                {
+                    pc_show = pcs;
+                    printf ("%s%" PRIi64 " Cubs", BACK, pcs);
+                    if (n_cubes > 1)
+                        printf (" = %.1f%%", 100.0 * pcs / n_cubes);
+                    fflush (stdout);
+                }
+            } // master
+        } // parallel for
+
+        printf ("%s                                    %s%s", BACK, BACK, BACK);
+        fflush (stdout);
     }
 
     // Univariate polynomial over Z in sparse representation.
-    using Poly = std::map<int,int>;
-
-    static Poly get_poly (const Set &set)
+    struct Poly
     {
-        Poly poly;
-        for (const auto &pc : set)
+        enum { POLY_TEX, POLY_LIST };
+        std::map<int,int> a_;
+
+        Poly () {}
+
+        // Way 0: 100% sequential.
+        Poly (const Set &set)
         {
-            const int coro = pc.corona_size ();
-            const auto &monome = poly.find (coro);
-            if (monome == poly.end ())
-                poly[coro] = 1;
-            else
-                monome->second += 1;
-        }
-        return poly;
-    }
-
-    static Poly get_poly (const Vector &vms)
-    {
-        Poly poly;
-        for (size_t j = 0; j < vms.size (); ++j)
-            if (vms[j].set.size ())
-                poly[j] = vms[j].set.size ();
-        return poly;
-    }
-
-    static void add_poly (Poly &p, const Poly &q)
-    {
-        for (const auto &q_mono : q)
-        {
-            const int expo = q_mono.first;
-            const int coef = q_mono.second;
-            const auto &p_mono = p.find (expo);
-            if (p_mono == p.end ())
-                p[expo] = coef;
-            else
-                p_mono->second += coef;
-        }
-    }
-
-    static Poly get_poly_way4 (const Vector &vms)
-    {
-        Poly poly;
-#pragma omp parallel for
-        for (size_t j = 0; j < vms.size (); ++j)
-        {
-            Poly p = PolyCube::get_poly (vms[j].set);
-#pragma omp critical
-            PolyCube::add_poly (poly, p);
-        }
-        return poly;
-    }
-
-    enum { POLY_TEX, POLY_LIST };
-
-    static void print_poly (int n, const Poly &poly,
-                            int style, const char *var = "q")
-    {
-        if (style == POLY_TEX)
-        {
-            printf ("c");
-            printf (n > 9 ? "_{%d}(p) = p" : "_%d(p) = p", n);
-            if (n != 1) printf (n > 9 ? "^{%d}" : "^%d", n);
-            printf (" \\cdot ");
-            printf (poly.size() > 1 ? "(" : "");
-            bool start = true;
-            for (auto m : poly)
+            for (const auto &pc : set)
             {
-                if (!start)
-                    printf (" + ");
-                if (m.second != 1)
-                    printf ("%d", m.second);
-                printf (m.first < 10 ? "%s^%d" : "%s^{%d}", var, m.first);
-                start = false;
+                const int coro = pc.corona().size ();
+                const auto &monome = a_.find (coro);
+                if (monome == a_.end ())
+                    a_[coro] = 1;
+                else
+                    monome->second += 1;
             }
-            printf ("%s\n", poly.size() > 1 ? ")" : "");
         }
-        else if (style == POLY_LIST)
+
+        // Way 4.
+        Poly (const Vector &vms)
         {
-            bool start = true;
-            printf ("/*%d*/ { ", n);
-            for (auto m : poly)
-            {
-                if (!start)
-                    printf (", ");
-                printf ("%d,%d", m.second, m.first);
-                start = false;
-            }
-            printf (" }\n");
+            Poly::init (*this, vms);
         }
-    }
-};
+
+        // Way 4.
+        Poly& operator += (const Poly &q)
+        {
+            for (const auto &q_mono : q.a_)
+            {
+                const int expo = q_mono.first;
+                const int coef = q_mono.second;
+                const auto &p_mono = a_.find (expo);
+                if (p_mono == a_.end ())
+                    a_[expo] = coef;
+                else
+                    p_mono->second += coef;
+            }
+            return *this;
+        }
+
+#pragma omp declare                                                     \
+    reduction (+ : Poly : omp_out += omp_in)                            \
+    initializer (omp_priv = omp_orig)
+
+        static void init (Poly &poly, const Vector &vms)
+        {
+            // Way 4.
+#pragma omp parallel for schedule(dynamic,20) reduction(+: poly)
+            for (size_t j = 0; j < vms.size (); ++j)
+                poly += Poly (vms[j].set);
+        }
+
+        void print (int n, int style, const char *var = "q") const
+        {
+            if (style == POLY_TEX)
+            {
+                printf ("c");
+                printf (n > 9 ? "_{%d}(p) = p" : "_%d(p) = p", n);
+                if (n != 1) printf (n > 9 ? "^{%d}" : "^%d", n);
+                printf (" \\cdot ");
+                printf (a_.size() > 1 ? "(" : "");
+                bool start = true;
+                for (auto m : a_)
+                {
+                    if (!start)
+                        printf (" + ");
+                    if (m.second != 1)
+                        printf ("%d", m.second);
+                    printf (m.first < 10 ? "%s^%d" : "%s^{%d}", var, m.first);
+                    start = false;
+                }
+                printf ("%s\n", a_.size() > 1 ? ")" : "");
+            }
+            else if (style == POLY_LIST)
+            {
+                bool start = true;
+                printf ("/*%d*/ { ", n);
+                for (auto m : a_)
+                {
+                    if (!start)
+                        printf (", ");
+                    printf ("%d,%d", m.second, m.first);
+                    start = false;
+                }
+                printf (" }\n");
+            }
+        }
+    }; // Poly
+}; // PolyCube
 
 
 inline std::ostream& operator << (std::ostream &ost, const PolyCube::Corona &c)
