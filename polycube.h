@@ -24,8 +24,9 @@
 // Own
 #include "polycube-count.h"
 
+#ifndef MEMOIZE_HASH
 #define MEMOIZE_HASH 1
-#define MEMOIZE_MIN 0
+#endif
 
 class Dim;
 class Cells;
@@ -284,17 +285,11 @@ struct PolyCube
 #if MEMOIZE_HASH
     hash_t m_hash;
 #endif
-#if MEMOIZE_MIN
-    Dim m_min_cube;
-#endif
 
     PolyCube (const PolyCube *pc, Dim d)
         : m_dad(pc), m_cube(d)
 #if MEMOIZE_HASH
         , m_hash(calc_hash ())
-#endif
-#if MEMOIZE_MIN
-        , m_min_cube(calc_min_cube ())
 #endif
     {}
 
@@ -370,11 +365,7 @@ struct PolyCube
     }
     Dim min_cube () const
     {
-#if MEMOIZE_MIN
-        return m_min_cube;
-#else
         return calc_min_cube ();
-#endif
     }
 
     // Way 0
