@@ -14,7 +14,9 @@ int main_polycube (int argc, char *argv[])
     if (argc > 4)   sscanf (argv[4], "%i", &n_pc);
 
     assert (way == 0 || way == 4);
-    assert (way != 5 && way != 1 && way != 2);
+    assert (dim == DIM);
+
+    std::cout << "Max threads: " << omp_get_max_threads () << "\n";
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0
     std::vector<PolyCube::Vector> vset (1 + level); // Way 4
@@ -25,7 +27,7 @@ int main_polycube (int argc, char *argv[])
 
         if (i == 1)
         {
-            PolyCube pc1 (nullptr, Dim::zeros (dim));
+            PolyCube pc1 (nullptr, Dim::all (0));
             if (way == 4)
             {
                 // Index is hash % n_pc.
@@ -39,7 +41,7 @@ int main_polycube (int argc, char *argv[])
         else
         {
             if (way == 4)
-                PolyCube::add_sprouts_way4 (dim, i, n_pc, vset[i], vset[i - 1]);
+                PolyCube::add_sprouts_way4 (i, n_pc, vset[i], vset[i - 1]);
             else if (way == 0)
             {
                 for (const auto &pc : set[i - 1])

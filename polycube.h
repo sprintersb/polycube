@@ -1,52 +1,31 @@
 // -*- c++ -*-
+#include <utility> // std::move
+#include <iostream>
+#include <mutex>
+#include <atomic>
+#include <string>
+#include <sstream>
+// Containers
 #include <array>
 #include <list>
 #include <map>
 #include <vector>
 #include <set>
 #include <unordered_set>
-#include <utility> // std::move
-#include <iostream>
+#include <unordered_map>
 #include <iterator>
-#include <mutex>
-#include <atomic>
-#include <cinttypes>
+// C
 #include <cstdint>
+#include <cinttypes>
 #include <cassert>
+#include <climits>
+// Other
 #include <omp.h>
+// Own
+#include "polycube-count.h"
 
-#define CHECK_SIZE 0
 #define MEMOIZE_HASH 1
 #define MEMOIZE_MIN 0
-
-inline int64_t cube_count (int dim, int n_cells)
-{
-    static const std::array<std::vector<int64_t>, 4 + 1> cube_counts =
-    {
-        {
-            {},
-            {},
-            // n = 2: https://oeis.org/A001168
-            { 1, 1, 2, 6, 19, 63, 216, 760, 2725, 9910, 36446, 135268, 505861,
-              1903890, 7204874, 27394666, 104592937, 400795844, 1540820542,
-              5940738676, 22964779660, 88983512783, 345532572678, 1344372335524,
-              5239988770268, 20457802016011 },
-            // n = 3: https://oeis.org/A001931
-            { 1, 1, 3, 15, 86, 534, 3481, 23502, 162913, 1152870, 8294738,
-              60494549, 446205905, 3322769321, 24946773111, 188625900446,
-              1435074454755, 10977812452428, 84384157287999, 651459315795897,
-              5049008190434659, 39269513463794006, 306405169166373418 },
-            // n = 4: https://oeis.org/A151830
-            { 1, 1, 4, 28, 234, 2162, 21272, 218740, 2323730, 25314097,
-              281345096, 3178474308, 36400646766, 421693622520, 4933625049464,
-              58216226287844, 692095652493483 }
-        }
-    };
-    return ((size_t) dim < cube_counts.size ()
-            && (size_t) n_cells < cube_counts[dim].size ())
-        ? cube_counts[dim][n_cells]
-        : -1;
-}
 
 class Dim;
 class Cells;
@@ -57,13 +36,25 @@ inline std::ostream& operator << (std::ostream&, const PolyCube&);
 
 struct DimIterator;
 
-using hash_t = unsigned;
+using hash_t = uint32_t;
 
 struct Dim
 {
     using value_t = int8_t;
+#if DIM == 2
+    using vector_t = value_t __attribute__((vector_size(2)));
+    using int_t = uint16_t;
+#elif DIM > 2 && DIM <= 4
+    using vector_t = value_t __attribute__((vector_size(4)));
+    using int_t = uint32_t;
+#elif DIM > 4 && DIM <= 8
     using vector_t = value_t __attribute__((vector_size(8)));
     using int_t = uint64_t;
+#else
+    using vector_t = value_t __attribute__((vector_size(16)));
+    using int_t = unsigned __int128;
+#endif
+
     struct SimpleHash
     {
         int_t operator () (const Dim &d) const
@@ -72,42 +63,28 @@ struct Dim
         }
     };
     vector_t v = (vector_t) (int_t) 0;
-    static inline constexpr int max_size = sizeof (vector_t) - 1;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
+    Dim () : v(Dim::all0) {}
     Dim (std::initializer_list<value_t> &&il)
     {
-        Dim::check_size ((int) il.size ());
+        assert (il.size () == 0 || il.size () == DIM);
         v = Dim::all0;
-        set_size ((int) il.size ());
         int j = 0;
         for (auto i : il)
             v[j++] = i;
     }
     Dim (const vector_t &v) : v(v) {}
 
-#if CHECK_SIZE
-    static void check_size (int s) { assert (s >= 0 && s <= Dim::max_size); }
-    void check_size (Dim d) const { assert (size () == d.size ()); }
-#else
-    static void check_size (int) {}
-    void check_size (Dim) const {}
-#endif
-
-    static Dim zeros (int n_zeros)
+    static Dim all (int w)
     {
-        Dim::check_size (n_zeros);
         Dim d{};
-        d.set_size (n_zeros);
+        for (int i = 0; i < d.size (); ++i)
+            d.v[i] = w;
         return d;
     }
     int size () const
     {
-        return v[Dim::max_size];
-    }
-    void set_size (int s)
-    {
-        Dim::check_size (s);
-        v[Dim::max_size] = s;
+        return DIM;
     }
     int operator [] (int i) const
     {
@@ -116,8 +93,6 @@ struct Dim
     // Shift-invariant comparison, so (int_t) <=> (int_t) won't work.
     int cmp (Dim d) const
     {
-        if (size () != d.size ())
-            return size () - d.size ();
         for (int i = 0; i < size (); ++i)
             if (v[i] != d.v[i])
                 return v[i] - d.v[i];
@@ -129,20 +104,31 @@ struct Dim
     bool operator >= (Dim d) const { return cmp (d) >= 0; }
     bool operator <  (Dim d) const { return cmp (d) <  0; }
     bool operator >  (Dim d) const { return cmp (d) >  0; }
-    void operator += (Dim d)
+    void operator += (Dim d) { v += d.v; }
+    void operator -= (Dim d) { v -= d.v; }
+    void operator *= (int i) { v *= (value_t) i; }
+    Dim operator + (Dim d) const { return Dim (v + d.v); }
+    Dim operator - (Dim d) const { return Dim (v - d.v); }
+    Dim operator * (int i) const { return Dim (v * (value_t) i); }
+    int operator % (Dim d) const { return v[0] * d[1] - v[1] * d[0]; }
+    Dim rot (int i /* Left in units of 90 deg */) const
     {
-        check_size (d);
-        v += d.v;
-        set_size (d.size ());
+        Dim d (*this);
+        i = (4 + (i % 4)) % 4;
+        while (i-- > 0)
+            d = Dim { (value_t) -d.v[1], d.v[0] };
+        return d;
     }
-    void operator -= (Dim d)
+    void min (Dim d)
     {
-        check_size (d);
-        v -= d.v;
-        set_size (d.size ());
+        for (int i = 0; i < size (); ++i)
+            v[i] = std::min (v[i], d.v[i]);
     }
-    Dim operator + (Dim d) const { Dim s (*this); s += d; return s; }
-    Dim operator - (Dim d) const { Dim s (*this); s -= d; return s; }
+    void max (Dim d)
+    {
+        for (int i = 0; i < size (); ++i)
+            v[i] = std::max (v[i], d.v[i]);
+    }
 
     // Don't use (int_t) since PolyCube wants a symmetric hash, but we want
     // Dim{a,b} ^ Dim{c,d} != Dim{a,d} ^ Dim{c,b}. // The below hash works
@@ -165,50 +151,38 @@ struct Dim
 };
 
 // Iterates over x with ||x||_2 = 1.
-struct DimIterator
+class DimIterator
 {
-    using iterator_category = std::forward_iterator_tag;
-    Dim d;
-    DimIterator (Dim d) : d(d) {}
-    bool operator != (DimIterator it) const
+    using Corona0 = std::array<Dim, 2 * DIM>;
+    static inline Corona0 get_corona0 ()
     {
-        return d != it.d;
+        Corona0 c;
+        for (int i = 0; i < 2 * DIM; ++i)
+            c[i].v[i / 2] = i % 2 == 0 ? 1 : -1;
+        return c;
+    }
+    static inline const Corona0 corona0 = DimIterator::get_corona0 ();
+    int pos;
+
+    DimIterator (int pos) : pos(pos) {}
+    friend Dim;
+public:
+    bool operator != (DimIterator di) const
+    {
+        return pos != di.pos;
     }
     void operator ++ ()
     {
-        for (int i = 0; ; ++i)
-            if (d.v[i] == 1)
-            {
-                d.v[i] = -1;
-                return;
-            }
-            else if (d.v[i] == -1)
-            {
-                d.v[i++] = 0;
-                if (i < d.size ())
-                    d.v[i] = 1;
-                else
-                    d.v = Dim::all0;
-                return;
-            }
+        ++ pos;
     }
     Dim operator * () const
     {
-        return d;
+        return DimIterator::corona0[pos];
     }
 };
 
-inline DimIterator Dim::end () const { return DimIterator (Dim{}); }
-inline DimIterator Dim::begin () const
-{
-    Dim d{};
-    if (size ())
-    {
-        d.set_size (size ());
-        d.v[0] = 1;
-    }
-    return DimIterator (d);
-}
+inline DimIterator Dim::begin () const { return DimIterator (0); }
+inline DimIterator Dim::end ()   const { return DimIterator (2 * DIM); }
 
 struct Cells
 {
@@ -428,14 +402,14 @@ struct PolyCube
     }
 
     // Way 4
-    static void add_sprouts_way4 (int dim, int n_cells, int n_slots,
+    static void add_sprouts_way4 (int n_cells, int n_slots,
                                   Vector &vset2, const Vector &vset)
     {
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex.
 
         // Only for printing stat.
-        const int64_t n_cubes = ::cube_count (dim, n_cells);
+        const int64_t n_cubes = ::cube_count (DIM, n_cells);
         std::atomic<int64_t> pc_count = 0;
         int64_t pc_show = pc_count;
 
