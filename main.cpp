@@ -17,6 +17,9 @@ int main_polycube (int argc, char *argv[])
 
     assert (way == 0 || way == 4);
     assert (dim == DIM);
+#ifdef CUBES_ARRAY
+    assert (level == CELLS);
+#endif
 
     std::cout << "Max threads: " << omp_get_max_threads () << "\n";
 
