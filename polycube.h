@@ -30,6 +30,8 @@
 #error CELLS=?
 #endif
 
+inline int max_possible_corona;
+
 class Dim;
 class Cubes;
 class Corona;
@@ -906,12 +908,65 @@ struct PolyCube
     reduction (+ : Poly : omp_out += omp_in)                            \
     initializer (omp_priv = omp_orig)
 
+#pragma omp declare                                                     \
+    reduction (vecadd : std::vector<int> : vecadd (omp_out, omp_in))    \
+    initializer (omp_priv = omp_orig)
+
+        static void vecadd (std::vector<int> &a, const std::vector<int> &b)
+        {
+            assert (a.size () == b.size ());
+            for (size_t j = 0; j < a.size (); ++j)
+                a[j] += b[j];
+        }
+
         static void init (Poly &poly, const Vector &vms)
         {
             // Way 4.
+#if 0
 #pragma omp parallel for schedule(dynamic,20) reduction(+: poly)
             for (size_t j = 0; j < vms.size (); ++j)
                 poly += Poly (vms[j].set);
+#elif 1
+            std::vector<std::atomic<int>> v (1 + max_possible_corona);
+            for (size_t j = 0; j < v.size (); ++j)
+                v[j] = 0;
+#pragma omp parallel for schedule(dynamic)
+            for (size_t j = 0; j < vms.size (); ++j)
+            {
+                std::vector<int> w (1 + max_possible_corona, 0);
+                for (const auto &pc : vms[j].set)
+                {
+                    const int coro = pc.corona().size ();
+                    assert (coro < (int) v.size ());
+                    w[coro] += 1;
+                }
+                for (size_t j = 0; j < v.size (); ++j)
+                    if (w[j])
+                        v[j] += w[j];
+            }
+
+            for (size_t j = 0; j < v.size (); ++j)
+                if (v[j] != 0)
+                    poly.a_[j] = v[j];
+#else
+            std::vector<int> v (1 + max_possible_corona, 0);
+#pragma omp parallel for schedule(dynamic) reduction(vecadd: v)
+            for (size_t j = 0; j < vms.size (); ++j)
+            {
+                std::vector<int> w (1 + max_possible_corona, 0);
+                for (const auto &pc : vms[j].set)
+                {
+                    const int coro = pc.corona().size ();
+                    assert (coro < (int) v.size ());
+                    w[coro] += 1;
+                }
+                vecadd (v, w);
+            }
+
+            for (size_t j = 0; j < v.size (); ++j)
+                if (v[j] != 0)
+                    poly.a_[j] = v[j];
+#endif
         }
 
         void print (int n, int style, const char *var = "q") const

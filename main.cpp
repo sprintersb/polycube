@@ -27,6 +27,9 @@ int main_polycube (int argc, char *argv[])
     const int n_slots = (int) (max_threads * max_threads / 2 / p_slow_collide);
     std::cout << "Slots      : " << n_slots << "\n";
 
+    max_possible_corona = 2 * (dim - 1) * level + 2;
+    std::cout << "maxi corona: " << max_possible_corona << "\n";
+
     std::vector<PolyCube::Set> set (1 + level);     // Way 0
     std::vector<PolyCube::Vector> vset (1 + level); // Way 4, 5
     std::vector<int> smallest_corona (1 + level, 0);
