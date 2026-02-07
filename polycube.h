@@ -5,6 +5,7 @@
 #include <atomic>
 #include <string>
 #include <sstream>
+#include <functional>
 // Containers
 #include <array>
 #include <list>
@@ -766,15 +767,17 @@ struct PolyCube
         }
     }
 
-    // Way 4
-    int add_sprouts_way4 (Vector &vms, int max_corona) const
+    using Filter = std::function<bool (const PolyCube&)>;
+
+    // Way 4, 5
+    int add_sprouts_way4_5 (Vector &vms, Filter filter) const
     {
         int new_count = 0;
         for (Dim d : corona().cells)
         {
             PolyCube pc (*this);
             pc.add (d);
-            if (max_corona > 0 && pc.has_large_corona (max_corona))
+            if (filter && ! filter (pc))
                 continue;
             MuxSet &slot = vms[pc.hash () % vms.size ()];
 
@@ -790,7 +793,7 @@ struct PolyCube
     // Way 4
     static void add_sprouts_way4 (int n_cells, int n_slots,
                                   Vector &vset2, const Vector &vset,
-                                  int max_corona = -1)
+                                  int progress_at, Filter filter)
     {
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex
@@ -798,19 +801,52 @@ struct PolyCube
         // Only for printing stat.
         const int64_t n_cubes = cube_count (DIM, n_cells);
         std::atomic<int64_t> pc_count = 0;
-        Progress<int64_t> pro (PROGRESS_WITH_TOTAL, n_cubes, 100000,
+        Progress<int64_t> pro (PROGRESS_WITH_TOTAL, n_cubes, progress_at,
                                "%" PRIi64 " Cubs = %.1f%%");
 
 #pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
-                pc_count += pc.add_sprouts_way4 (vset2, max_corona);
+                pc_count += pc.add_sprouts_way4_5 (vset2, filter);
 
             // Print stat.
             if (omp_get_thread_num () == 0)
                 pro.update (pc_count);
         } // parallel for
+    }
+
+    struct Poly;
+    static Poly get_sprouts_poly_way5 (int N_cells, int n_cells, int n_slots,
+                                       int n_parts,
+                                       Vector &vset2, const Vector &vset)
+    {
+        if (n_cells < N_cells)
+        {
+            add_sprouts_way4 (n_cells, n_slots, vset2, vset, 100000, nullptr);
+            return Poly (vset2);
+        }
+        assert (n_cells == N_cells);
+        assert (n_slots >= 1);
+        assert (n_parts >= 1);
+
+        // Piecing together the poly by doing one slot at a time.
+        Poly poly;
+        n_slots = 2 + n_slots / n_parts;
+        for (int part = 0; part < n_parts; ++part)
+        {
+            const Filter filter = [part, n_parts] (const PolyCube &pc)
+            {
+                return part == (int) (pc.hash () % n_parts);
+            };
+            std::cout << "part " << (1 + part) << "/" << n_parts << "\n";
+            add_sprouts_way4 (n_cells, n_slots, vset2, vset, 10000, filter);
+            poly += Poly (vset2);
+            // This is why we are here: Purging the output each time is
+            // slow but saves the memory.
+            vset2.clear ();
+        }
+        return poly;
     }
 
     // Univariate polynomial over Z in sparse representation.
@@ -855,6 +891,15 @@ struct PolyCube
                     p_mono->second += coef;
             }
             return *this;
+        }
+
+        int64_t operator () (int64_t x) const
+        {
+            assert (x == 1 && "todo");
+            int64_t y = 0;
+            for (const auto &mono : a_)
+                y += mono.second;
+            return y;
         }
 
 #pragma omp declare                                                     \
