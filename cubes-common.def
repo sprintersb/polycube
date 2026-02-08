@@ -1,0 +1,29 @@
+// -*- c++ -*-
+
+#if !defined CUBES_H || !(defined CUBES_VECT_H ^ defined CUBES_REL_H)
+#error
+#endif
+
+public:
+
+Box bounding_box () const;
+
+std::string ascii (char c = '*') const
+{
+#if DIM == 2
+    auto bbox = bounding_box ();
+    std::string str;
+    for (Dim::value_t y = bbox.hi[1]; y >= bbox.lo[1]; --y)
+    {
+        for (Dim::value_t x = bbox.lo[0]; x <= bbox.hi[0]; ++x)
+            str += contains (Dim { x, y }) ? c : ' ';
+        str += "\n";
+    }
+    return str;
+#else
+    (void) c;
+    return "Cubes.ascii(DIM != 2)";
+#endif
+}
+
+friend std::ostream& operator << (std::ostream&, const Cubes&);

@@ -7,637 +7,30 @@
 #include <sstream>
 #include <functional>
 // Containers
-#include <array>
-#include <list>
 #include <map>
 #include <vector>
-#include <set>
 #include <unordered_set>
-#include <unordered_map>
-#include <iterator>
 // C
 #include <cstdint>
 #include <cinttypes>
 #include <cassert>
 #include <climits>
+#include <cstdio>
 // Other
 #include <omp.h>
 // Own
 #include "polycube-count.h"
 #include "progress.h"
+#include "bool-counter.h"
 
-#if defined(CUBES_ARRAY) && !defined(CELLS)
-#error CELLS=?
-#endif
+#include "hash.h"
+#include "dim.h"
+#include "cubes.h"
+#include "corona.h"
+
+BoolCounter eqne;
 
 inline int max_possible_corona;
-
-class Dim;
-class Cubes;
-class Corona;
-class PolyCube;
-inline std::ostream& operator << (std::ostream&, Dim);
-inline std::ostream& operator << (std::ostream&, const Cubes&);
-inline std::ostream& operator << (std::ostream&, const Corona&);
-inline std::ostream& operator << (std::ostream&, const PolyCube&);
-
-struct DimIterator;
-using hash_t = uint32_t;
-
-struct Dim
-{
-    using value_t = int8_t;
-#if DIM == 2
-    using vector_t = value_t __attribute__((vector_size(2)));
-    using int_t = uint16_t;
-#elif DIM > 2 && DIM <= 4
-    using vector_t = value_t __attribute__((vector_size(4)));
-    using int_t = uint32_t;
-#elif DIM > 4 && DIM <= 8
-    using vector_t = value_t __attribute__((vector_size(8)));
-    using int_t = uint64_t;
-#else
-    using vector_t = value_t __attribute__((vector_size(16)));
-    using int_t = unsigned __int128;
-#endif
-
-    vector_t v = (vector_t) (int_t) 0;
-    static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
-    Dim () : v(Dim::all0) {}
-    Dim (std::initializer_list<value_t> &&il)
-    {
-        assert (il.size () == 0 || il.size () == DIM);
-        v = Dim::all0;
-        int j = 0;
-        for (auto i : il)
-            v[j++] = i;
-    }
-    Dim (const vector_t &v) : v(v) {}
-
-    static Dim all (int w)
-    {
-        Dim d{};
-        for (int i = 0; i < d.size (); ++i)
-            d.v[i] = w;
-        return d;
-    }
-    int size () const
-    {
-        return DIM;
-    }
-    void set (int i, int val)
-    {
-#ifdef CUBES_ARRAY
-        // v[i] = Gives warning with CUBES_ARRAY.
-        vector_t w(v);
-        w[i] = (Dim::value_t) val;
-        v = w;
-#else
-        v[i] = (Dim::value_t) val;
-#endif
-    }
-    int operator [] (int i) const
-    {
-        return v[i];
-    }
-    // Shift-invariant comparison, so (int_t) <=> (int_t) won't work.
-    // Benefit is that Cubes.cells don't change their order when shifted.
-    int cmp (Dim d) const
-    {
-        for (int i = 0; i < size (); ++i)
-            if (v[i] != d.v[i])
-                return v[i] - d.v[i];
-        return 0;
-    }
-    bool operator == (Dim d) const { return (int_t) v == (int_t) d.v; }
-    bool operator != (Dim d) const { return (int_t) v != (int_t) d.v; }
-    bool operator <= (Dim d) const { return cmp (d) <= 0; }
-    bool operator >= (Dim d) const { return cmp (d) >= 0; }
-    bool operator <  (Dim d) const { return cmp (d) <  0; }
-    bool operator >  (Dim d) const { return cmp (d) >  0; }
-    void operator += (Dim d) { v += d.v; }
-    void operator -= (Dim d) { v -= d.v; }
-    void operator *= (int i) { v *= (value_t) i; }
-    Dim operator + (Dim d) const { return Dim (v + d.v); }
-    Dim operator - (Dim d) const { return Dim (v - d.v); }
-    Dim operator * (int i) const { return Dim (v * (value_t) i); }
-    int operator % (Dim d) const { return v[0] * d[1] - v[1] * d[0]; }
-    Dim rot (int i /* Left in units of 90 deg */) const
-    {
-        Dim d (*this);
-        i = (4 + (i % 4)) % 4;
-        while (i-- > 0)
-            d = Dim { (value_t) -d.v[1], d.v[0] };
-        return d;
-    }
-    void min (Dim d)
-    {
-        for (int i = 0; i < size (); ++i)
-            v[i] = std::min (v[i], d.v[i]);
-    }
-    void max (Dim d)
-    {
-        for (int i = 0; i < size (); ++i)
-            v[i] = std::max (v[i], d.v[i]);
-    }
-    hash_t hash () const
-    {
-        if (sizeof (int_t) <= sizeof (hash_t))
-            return (hash_t) (int_t) v;
-        else
-        {
-            hash_t h = 0;
-            for (int i = 0; i < size (); ++i)
-                h = 13 * h + (hash_t) v[i];
-            return h;
-        }
-    }
-    struct Hash
-    {
-        hash_t operator () (Dim d) const
-        {
-            return d.hash ();
-        }
-    };
-
-    DimIterator begin () const;
-    DimIterator end () const;
-};
-
-struct Box
-{
-    Dim lo, hi;
-    bool contains (Dim d)
-    {
-        for (int i = 0; i < d.size (); ++i)
-            if (d.v[i] < lo.v[i] || d.v[i] > hi.v[i])
-                return false;
-        return true;
-    }
-    Box grow (int g) const
-    {
-        return Box { lo - Dim::all (g),  hi + Dim::all (g) };
-    }
-};
-
-
-class DimIterator
-{
-    using Corona0 = std::array<Dim, 2 * DIM>;
-    static inline Corona0 get_corona0 ()
-    {
-        Corona0 c;
-        for (int i = 0; i < 2 * DIM; ++i)
-            c[i].v[i / 2] = i % 2 == 0 ? 1 : -1;
-        return c;
-    }
-    static inline const Corona0 corona0 = DimIterator::get_corona0 ();
-    int pos;
-
-    DimIterator (int pos) : pos(pos) {}
-    friend Dim;
-public:
-    bool operator != (DimIterator di) const
-    {
-        return pos != di.pos;
-    }
-    void operator ++ ()
-    {
-        ++ pos;
-    }
-    Dim operator * () const
-    {
-        return DimIterator::corona0[pos];
-    }
-};
-
-inline DimIterator Dim::begin () const { return DimIterator (0); }
-inline DimIterator Dim::end ()   const { return DimIterator (2 * DIM); }
-
-
-// Is a vect since that is most memory friendly.
-
-class DimArray
-{
-    std::array<Dim, 1 + CELLS> a_;
-public:
-    Dim operator [] (int i) const
-    {
-        return a_[i];
-    }
-    /*Dim& operator [] (int i)
-    {
-        return a_[i];
-        }*/
-    int size () const
-    {
-        int sz = (int) (Dim::int_t) a_[CELLS].v;
-        assert (sz >= 0 && sz <= CELLS);
-        return sz;
-    }
-    struct Iterator
-    {
-        friend DimArray;
-        void operator ++ () { ++ptr; };
-        bool operator == (const Iterator &i) const { return ptr == i.ptr; }
-        bool operator != (const Iterator &i) const { return ptr != i.ptr; }
-        Dim& operator * () { return *ptr; }
-    private:
-        Dim *ptr;
-        Iterator () = delete;
-        Iterator (Dim *ptr) : ptr(ptr) {}
-    };
-    struct CIterator
-    {
-        friend DimArray;
-        void operator ++ () { ++ptr; };
-        bool operator == (const CIterator &i) const { return ptr == i.ptr; }
-        bool operator != (const CIterator &i) const { return ptr != i.ptr; }
-        const Dim& operator * () { return *ptr; }
-    private:
-        const Dim *ptr;
-        CIterator () = delete;
-        CIterator (const Dim *ptr) : ptr(ptr) {}
-    };
-    Iterator begin () { return Iterator (&a_[0]); }
-    Iterator end ()   { return Iterator (&a_[size ()]); }
-    CIterator begin () const { return CIterator (&a_[0]); }
-    CIterator end ()   const { return CIterator (&a_[size ()]); }
-    void insert (Iterator &it, Dim d)
-    {
-        const int pos = (int) (& (*it) - & a_[0]);
-        //std::cout << "insert(" << pos << "/" << size () << ")";
-        //std::cout.flush();
-        assert (pos >= 0 && pos <= size ());
-        for (int i = size (); i > pos; --i)
-            a_[i] = a_[i - 1];
-        a_[pos] = d;
-        set_size (1 + size ());
-    }
-
-private:
-    void set_size (int sz)
-    {
-        assert (sz >= 0 && sz <= CELLS);
-        a_[CELLS].v = (Dim::vector_t) (Dim::int_t) sz;
-    }
-};
-
-struct Cubes
-{
-#ifdef CUBES_ARRAY
-    DimArray cells;
-#else
-    std::vector<Dim> cells;
-#endif
-
-    int size () const
-    {
-        return cells.size ();
-    }
-    void add (Dim d)
-    {
-        for (auto it = cells.begin (); ; ++it)
-        {
-            int i;
-            if (it == cells.end () || (i = d.cmp (*it)) < 0)
-            {
-                cells.insert (it, d);
-                break;
-            }
-            if (i == 0)
-                assert (i != 0 && "Assume we always increase cells");
-        }
-    }
-    Cubes operator * (int i) const
-    {
-        Cubes c { *this };
-        for (Dim &d : c.cells)
-            d *= i;
-        return c;
-    }
-    int cmp (const Cubes &c) const
-    {
-        auto &&p2 = c.cells.begin ();
-        auto &&e2 = c.cells.end ();
-        for (Dim d : cells)
-        {
-            if (p2 == e2)
-                return 1;
-            const int i = d.cmp (*p2);
-            if (i)
-                return i;
-            ++p2;
-        }
-        return p2 == e2 ? 0 : -1;
-    }
-    hash_t hash () const
-    {
-        hash_t h = 0;
-        for (Dim d : cells)
-            h = h * 13 + d.hash ();
-        return h;
-    }
-    bool contains (Dim d) const
-    {
-        for (Dim c : cells)
-        {
-            const int i = c.cmp (d);
-            if (i == 0)
-                return true;
-            if (i > 0)
-                break;
-        }
-        return false;
-    }
-    void shift (int i, int off)
-    {
-        for (auto &c : cells)
-        {
-            assert (i < c.size ());
-            c.set (i, c[i] + off);
-        }
-    }
-
-    Box bounding_box () const
-    {
-        Box box { cells[0], cells[0] };
-        for (int i = 1; i < size (); ++i)
-        {
-            box.lo.min (cells[i]);
-            box.hi.max (cells[i]);
-        }
-        return box;
-    }
-
-    //////////////////////////////////////////////////////////////////////////
-    // Lines are only used in dimension 2, so they occupy only 4 bytes.
-    // Hence pass them as objects and not as const Line&.
-    struct Line
-    {
-        Dim a, b;
-        bool operator == (Line l) const
-        {
-            return a == l.a && b == l.b;
-        }
-        struct Hash
-        {
-            hash_t operator () (Line l) const
-            {
-                return l.a.hash() + 13 * l.b.hash();
-            }
-        };
-        struct SymmetricHash
-        {
-            hash_t operator () (Line l) const
-            {
-                return l.a.hash() + l.b.hash();
-            }
-        };
-        struct SymmetricEQ
-        {
-            bool operator () (Line g, Line h) const
-            {
-                return g == h || (g.a == h.b && g.b == h.a);
-            }
-        };
-        friend std::ostream& operator << (std::ostream &ost, Line l);
-    };
-    struct Polygon : public std::list<Dim>
-    {
-        std::string svg (bool rel = 1) const
-        {
-            std::stringstream ss;
-            Dim from{};
-            const Dim O;
-            bool start = true;
-            for (const Dim d : *this)
-            {
-                if (start)
-                {
-                    ss << "M" << d[0] << " " << d[1];
-                    start = false;
-                }
-                else if ((d - from)[0] == 0)
-                    ss << "Vv"[rel] << (d - (rel ? from : O))[1];
-                else if ((d - from)[1] == 0)
-                    ss << "Hh"[rel] << (d - (rel ? from : O))[0];
-                else
-                    assert (0);
-                from = d;
-            }
-            ss << "Zz"[rel];
-            return ss.str ();
-        }
-        void push (Dim d, bool tidy)
-        {
-            if (auto p0 = rbegin (); tidy && p0 != rend ())
-                if (auto p1 = p0; ++p1 != rend ())
-                {
-                    Dim d1 = *p0 - *p1;
-                    Dim d2 = d - *p0;
-                    if (d1[0] == 0 && d2[0] == 0)
-                    {
-                        p0->v[1] = d[1];
-                        return;
-                    }
-                    else if (d1[1] == 0 && d2[1] == 0)
-                    {
-                        p0->v[0] = d[0];
-                        return;
-                    }
-                }
-            push_back (d);
-        }
-        friend std::ostream& operator << (std::ostream&, const Polygon&);
-    };
-    using Polygons = std::vector<Polygon>;
-
-    struct BorderFinder
-    {
-        struct LinePool
-        {
-            using LineBucket = std::unordered_set
-                <Line, Line::SymmetricHash, Line::SymmetricEQ>;
-            std::unordered_map<Dim, LineBucket, Dim::Hash> bucks;
-            void operator += (Line l)
-            {
-                add (l.a, l);
-                add (l.b, l);
-            }
-            int operator -= (Line l)
-            {
-                bool killa = sub(l.a, l);
-                bool killb = sub(l.b, l);
-                return killa + killb;
-            }
-            void add (Dim d, Line l)
-            {
-                if (auto &&b = bucks.find (d); b == bucks.end ())
-                    bucks[d] = LineBucket { l };
-                else
-                    b->second.emplace (l);
-            }
-            bool sub (Dim d, Line l)
-            {
-                if (auto &&b = bucks.find (d); b == bucks.end ())
-                    return false;
-                else
-                {
-                    const bool erased = b->second.erase (l);
-                    if (b->second.empty ())
-                        bucks.erase (d);
-                    return erased;
-                }
-            }
-            const LineBucket* get (Dim d) const
-            {
-                auto &&b = bucks.find (d);
-                return b == bucks.end () ? nullptr : & b->second;
-            }
-            bool contains (Line line) const
-            {
-                const LineBucket *buck = get (line.a);
-                return buck && buck->find (line) != buck->end ();
-            }
-            friend std::ostream& operator << (std::ostream&, const LinePool&);
-        }; // LinePool
-
-        const Cubes &cs;
-        LinePool pool;
-        Polygons polygons;
-
-        BorderFinder (const Cubes &cs)
-            : cs(cs)
-        {
-            assert (DIM == 2);
-            // Collect all border line segments in pool.
-            for (Dim p : cs.cells)
-                for (Dim d : p)
-                    if (! cs.contains (p + d))
-                    {
-                        // P+d is in corona.  Determine unoriented line
-                        // segment between P and P+d.
-                        Dim off = Dim { d[0] + d[1] > 0, d[1] > d[0] };
-                        pool += Line { p + off, p + off + d.rot(1) };
-                    }
-        }
-        enum Orient { Left = 1, Right = -1 };
-        Line get_start (bool outer) const
-        {
-            if (outer)
-            {
-                for (Dim p : cs.cells)
-                    if (p[1] == 0)
-                        return { p, p + Dim{1,0} };
-            }
-            else
-                for (Dim p : cs.cells)
-                    for (Dim::value_t dy = 0; dy <= 1; ++dy)
-                    {
-                        const Dim a = p + Dim { 0, dy };
-                        const Dim b = a + Dim { 1, 0 };
-                        Line line { dy ? b : a, dy ? a : b };
-                        if (pool.contains (line))
-                            return line;
-                    }
-            assert (0);
-        }
-        Polygon get_polygon (bool outer, bool tidy)
-        {
-            Polygon polygon;
-            const Line start = get_start (outer);
-            Orient orient = start.b[0] > start.a[0] ? Left : Right;
-            Dim p2{};
-            for (Line line = start; ; line = Line { line.b, p2 })
-            {
-                polygon.push (line.a, tidy);
-                assert (2 == (pool -= line));
-                if (line.b == start.a)
-                    break;
-
-                // Iterate over all pool lines that start / end at line.b.
-                const LinePool::LineBucket *buck = pool.get (line.b);
-                assert (buck && ! buck->empty ());
-                const Dim dir = line.b - line.a;
-                int sin_angle = -100;
-                for (Line l : *buck)
-                {
-                    if (l.a != line.b)
-                        std::swap (l.a, l.b);
-                    assert (l.a == line.b);
-                    const int sina = (dir % (l.b - l.a)) * orient;
-                    // > makes the outer border greedy, < makes it reluctant.
-                    if (sina > sin_angle)
-                        p2 = l.b, sin_angle = sina;
-                }
-                assert (sin_angle >= -1 && sin_angle <= 1);
-            }
-            polygon.push (start.a, tidy);
-            return polygon;
-        }
-        // Return a vector of Polygons that represent the border of the
-        // Cubes.  The first polygon is the outer border and maybe more.
-        // The rest represent (parts of) the inner border and is optional.
-        Polygons border (bool tidy = 1)
-        {
-            for (bool outer = 1; ! pool.bucks.empty (); outer = 0)
-                polygons.push_back (get_polygon (outer, tidy));
-            assert (polygons.size () >= 1);
-            return polygons;
-        }
-    };
-    //////////////////////////////////////////////////////////////////////////
-
-    std::string ascii (char c = '*') const
-    {
-#if DIM == 2
-        auto bbox = bounding_box ();
-        std::string str;
-        for (Dim::value_t y = bbox.hi[1]; y >= bbox.lo[1]; --y)
-        {
-            for (Dim::value_t x = bbox.lo[0]; x <= bbox.hi[0]; ++x)
-                str += contains (Dim { x, y }) ? c : ' ';
-            str += "\n";
-        }
-        return str;
-#else
-        (void) c;
-        return "Cubes.ascii(DIM != 2)";
-#endif
-    }
-};
-
-
-struct Corona
-{
-    std::unordered_set<Dim, Dim::Hash> cells;
-
-    int size () const
-    {
-        return cells.size ();
-    }
-    void add (Dim d)
-    {
-        cells.emplace (d);
-    }
-    void erase (Dim d)
-    {
-        cells.erase (d);
-    }
-    bool contains (Dim d) const
-    {
-        return cells.find (d) != cells.end ();
-    }
-    Corona operator * (int i) const
-    {
-        Corona c;
-        for (Dim d : cells)
-            c.add (d * i);
-        return c;
-    }
-};
-
 
 struct PolyCube
 {
@@ -648,11 +41,30 @@ struct PolyCube
             return pc.hash ();
         }
     };
-
     using Set = std::unordered_set<PolyCube, Hash>;
+
+    PolyCube (const PolyCube *dad, Dim d)
+        : m_cubes(dad ? & dad->m_cubes : nullptr, d)
+        , m_hash (m_cubes.hash ())
+    {}
+
+    struct Iterator
+    {
+        CubesIterator it;
+        void operator ++ () { ++it; };
+        bool operator == (const Iterator &r) const { return it == r.it; }
+        bool operator != (const Iterator &r) const { return it != r.it; }
+        Dim operator * () const { return *it; }
+    };
+    Iterator begin () const  { return Iterator { m_cubes.cbegin () }; }
+    Iterator end () const    { return Iterator { m_cubes.cend () }; }
+    Iterator cbegin () const { return Iterator { m_cubes.cbegin () }; }
+    Iterator cend () const   { return Iterator { m_cubes.cend () }; }
+    using const_iterator = Iterator;
 
 #pragma omp declare reduction(merge : Set : merge (omp_out, omp_in)) \
     initializer (omp_priv = omp_orig)
+
     static void merge (Set &sout, Set &sin)
     {
         sout.merge (sin);
@@ -662,7 +74,6 @@ struct PolyCube
         s.emplace (std::move (pc));
     }
 
-    using List = std::list<PolyCube>;
     struct MuxSet
     {
         // std::mutex is not movable, so we have to use the
@@ -672,19 +83,28 @@ struct PolyCube
         Set set;
     };
     using Vector = std::vector<MuxSet>;
+private:
     Cubes m_cubes;
     hash_t m_hash = 0;
+public:
 
+    const Cubes& cubes () const
+    {
+        return m_cubes;
+    }
     bool contains (Dim d) const
     {
-        return m_cubes.contains (d);
+        for (Dim x : *this)
+            if (x == d)
+                return true;
+        return false;
     }
     Corona corona () const
     {
         Corona cora;
-        for (Dim d : m_cubes.cells)
+        for (Dim d : *this)
             for (Dim delta : d)
-                if (! m_cubes.contains (d + delta))
+                if (! contains (d + delta))
                     cora.add (d + delta);
         return cora;
     }
@@ -692,22 +112,24 @@ struct PolyCube
     {
         return m_cubes.bounding_box ();
     }
-    PolyCube operator * (int i) const
-    {
-        Cubes c = m_cubes * i;
-        return PolyCube { c, c.hash () };
-    }
     bool has_large_corona (int max_corona) const
     {
         const Corona &cora = corona ();
         if (cora.size () > max_corona)
             return true;
+        // O.b.d.A. the bounding box is oriented in a canonical way.
+        const Box bb = bounding_box ();
+        const Dim diam = bb.hi - bb.lo;
+        for (int j = 1; j < diam.size (); ++j)
+            if (diam[j] > diam[j - 1])
+            return true;
+
         // Try some simple convexity tests.  Use an unordered_set for faster
         // accesses.  Additional size doesn't matter here.
         Corona cubs;
-        for (const auto &c : m_cubes.cells)
-            cubs.add (c);
-        for (Dim d : cora.cells)
+        for (Dim d : *this)
+            cubs.add (d);
+        for (Dim d : cora)
         {
             if (cubs.contains (d + Dim{1,0}) && cubs.contains (d - Dim{1,0}))
                 return true;
@@ -716,22 +138,10 @@ struct PolyCube
         }
         return false; // Only weakly false, i.e. not necessarily convex.
     }
-    void add (Dim d)
-    {
-        m_cubes.add (d);
-        // Normalize m_cubes.
-        for (int i = 0; i < d.size (); ++i)
-            if (d.v[i] < 0)
-                m_cubes.shift (i, -d.v[i]);
-        m_hash = m_cubes.hash ();
-    }
+
     bool operator == (const PolyCube &c) const
     {
-        return m_cubes.cmp (c.m_cubes) == 0;
-    }
-    bool operator < (const PolyCube &c) const
-    {
-        return m_cubes.cmp (c.m_cubes) < 0;
+        return eqne += m_cubes == c.m_cubes;
     }
     hash_t hash () const
     {
@@ -761,10 +171,9 @@ struct PolyCube
     // Way 0
     void add_sprouts (Set &set) const
     {
-        for (Dim d : corona().cells)
+        for (Dim d : corona())
         {
-            PolyCube pc (*this);
-            pc.add (d);
+            PolyCube pc (this, d);
             set.emplace (std::move (pc));
         }
     }
@@ -775,10 +184,9 @@ struct PolyCube
     int add_sprouts_way4_5 (Vector &vms, Filter filter) const
     {
         int new_count = 0;
-        for (Dim d : corona().cells)
+        for (Dim d : corona())
         {
-            PolyCube pc (*this);
-            pc.add (d);
+            PolyCube pc (this, d);
             if (filter && ! filter (pc))
                 continue;
             MuxSet &slot = vms[pc.hash () % vms.size ()];
@@ -1005,64 +413,13 @@ struct PolyCube
             }
         }
     }; // Poly
+    friend std::ostream& operator << (std::ostream&, const PolyCube&);
 }; // PolyCube
+
 
 inline std::ostream& operator << (std::ostream &ost, const PolyCube &pc)
 {
-    ost << "cubes: " << pc.m_cubes << "\n";
+    ost << "cubes: " << pc.cubes() << "\n";
     ost << "coron: " << pc.corona() << "\n";
     return ost;
-}
-
-inline std::ostream& operator << (std::ostream &ost, Dim d)
-{
-    char comma = '<';
-    for (int i = 0; i < d.size (); ++i)
-    {
-        ost << comma << (int) d[i];
-        comma = ',';
-    }
-    return ost << '>';
-}
-
-inline std::ostream& operator << (std::ostream &ost, const Corona &c)
-{
-    ost << "{#" << c.size ();
-    for (auto c : c.cells)
-        ost << " " << c;
-    return ost << " }";
-}
-
-inline std::ostream& operator << (std::ostream &ost, const Cubes &c)
-{
-    ost << "{#" << c.size ();
-    for (auto c : c.cells)
-        ost << " " << c;
-    return ost << " }";
-}
-
-inline std::ostream& operator << (std::ostream &ost, Cubes::Line l)
-{
-    return ost << l.a << "--" << l.b;
-}
-
-inline std::ostream& operator << (std::ostream &ost,
-                                  const Cubes::BorderFinder::LinePool &lp)
-{
-    for (const auto& b : lp.bucks)
-    {
-        ost << b.first << ":";
-        for (auto l : b.second)
-            ost << "  " << l;
-        ost << "\n";
-    }
-    return ost;
-}
-
-inline std::ostream& operator << (std::ostream &ost, const Cubes::Polygon &pg)
-{
-    ost << "Polygon: ";
-    for (Dim p : pg)
-        ost << " " << p;
-    return ost << "\n";
 }
