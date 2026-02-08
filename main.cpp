@@ -1,5 +1,11 @@
-#include "polycube.h"
+#include <vector>
+#include <iostream>
+// C
+#include <cassert>
+#include <cstdio>
 #include <cstdlib>
+// Own
+#include "polycube.h"
 
 int main_polycube (int argc, char *argv[])
 {
@@ -12,6 +18,14 @@ int main_polycube (int argc, char *argv[])
     if (argc > 2)   sscanf (argv[2], "%i", &level);
     if (argc > 3)   sscanf (argv[3], "%i", &way);
     if (argc > 4)   sscanf (argv[4], "%i", &extra_spice);
+
+#if defined CUBES_REL
+    std::cout << "CUBES_REL  DIM=" << DIM << "\n";
+#elif defined CUBES_ARRAY
+    std::cout << "CUBES_ARRAY  DIM=" << DIM << "  CELLS=" << CELLS << "\n";
+#else
+    std::cout << "CUBES_VECT DIM=" << DIM << "\n";
+#endif
 
     assert (way == 0 || way == 4 || way == 5);
     assert (dim == DIM);
@@ -41,8 +55,7 @@ int main_polycube (int argc, char *argv[])
 
         if (i == 1)
         {
-            PolyCube pc1;
-            pc1.add (Dim::all (0));
+            PolyCube pc1 (nullptr, Dim::all (0));
             if (way == 4 || way == 5)
             {
                 // Index is hash % n_slots.
@@ -103,13 +116,21 @@ int main_polycube (int argc, char *argv[])
         smallest_corona[i] = poly.a_.begin ()->first;
         std::cout << ccount << " polycubes"
                   << "  (coro min: " << smallest_corona[i] << ")\n";
-        poly.print (i, PolyCube::Poly::POLY_TEX);
+        std::cout << "NE/EQ = " << eqne << "\n";
+        eqne.reset();
+
+        //poly.print (i, PolyCube::Poly::POLY_TEX);
         std::cout.flush();
+
         if (way == 4 && extra_spice > 0)
         {
             PolyCube::Set small_corona = PolyCube::find_min_corona (vset[i]);
             if (! small_corona.empty ())
-                std::cout << small_corona.begin()->m_cubes.ascii ();
+            {
+                const auto &best = small_corona.begin()->cubes();
+                std::cout << best.ascii ();
+                std::cout << BorderFinder (best).border().svg() << "\n";
+            }
             std::cout.flush();
         }
 
@@ -122,11 +143,11 @@ int main_polycube (int argc, char *argv[])
             for (const auto &ms: vset[i])
                 for (const auto &pc : ms.set)
                 {
-                    auto &&ps = Cubes::BorderFinder (pc.m_cubes).border();
+                    auto &&ps = BorderFinder (pc.cubes()).border();
                     for (const auto &pgon : ps)
                     {
                         std::cout << pgon;
-                        std::cout << pc.m_cubes.ascii ();
+                        std::cout << pc.cubes().ascii ();
                     }
                 }
     }
