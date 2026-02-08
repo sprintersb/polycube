@@ -168,6 +168,37 @@ public:
         return set;
     }
 
+    using Filter = std::function<bool (const PolyCube&)>;
+
+    int add_sprouts_leap_way5 (Vector &vms, int leap, Filter filter) const
+    {
+        assert (leap >= 2);
+#ifdef CUBES_REL
+        assert (0 && "todo: leaping for CUBES_REL");
+#endif
+        int new_count = 0;
+        std::vector<Set> pcs (leap);
+        pcs[0].insert (*this);
+        for (int i = 1; i <= leap; ++i)
+        {
+            for (const auto &dad : pcs[i - 1])
+                for (Dim d : dad.corona())
+                    if (PolyCube pc (&dad, d); i < leap)
+                        pcs[i].emplace (std::move (pc));
+                    else if (! filter || filter (pc))
+                    {
+                        MuxSet &slot = vms[pc.hash () % vms.size ()];
+
+                        slot.mux.lock ();
+                        const auto n = slot.set.size ();
+                        slot.set.emplace (std::move (pc));
+                        new_count += n != slot.set.size ();
+                        slot.mux.unlock ();
+                    }
+        }
+        return new_count;
+    }
+
     // Way 0
     void add_sprouts (Set &set) const
     {
@@ -177,8 +208,6 @@ public:
             set.emplace (std::move (pc));
         }
     }
-
-    using Filter = std::function<bool (const PolyCube&)>;
 
     // Way 4, 5
     int add_sprouts_way4_5 (Vector &vms, Filter filter) const
@@ -201,7 +230,7 @@ public:
     }
 
     // Way 4
-    static void add_sprouts_way4 (int n_cells, int n_slots,
+    static void add_sprouts_way4 (int n_cells, int n_slots, int leap,
                                   Vector &vset2, const Vector &vset,
                                   int progress_at, Filter filter)
     {
@@ -218,7 +247,9 @@ public:
         for (size_t j = 0; j < vset.size (); ++j)
         {
             for (const auto &pc : vset[j].set)
-                pc_count += pc.add_sprouts_way4_5 (vset2, filter);
+                pc_count += leap
+                    ? pc.add_sprouts_leap_way5 (vset2, leap, filter)
+                    : pc.add_sprouts_way4_5 (vset2, filter);
 
             // Print stat.
             if (omp_get_thread_num () == 0)
@@ -227,18 +258,24 @@ public:
     }
 
     struct Poly;
-    static Poly get_sprouts_poly_way5 (int N_cells, int n_cells, int n_slots,
-                                       int n_parts,
+    static Poly get_sprouts_poly_way5 (int n_cells, int n_slots,
+                                       int n_parts, int leap,
                                        Vector &vset2, const Vector &vset)
     {
-        if (n_cells < N_cells)
+        if (! leap)
         {
-            add_sprouts_way4 (n_cells, n_slots, vset2, vset, 100000, nullptr);
+            add_sprouts_way4 (n_cells, n_slots, 0, vset2, vset,
+                              100000, nullptr);
             return Poly (vset2);
         }
-        assert (n_cells == N_cells);
+        std::cout << "leaping " << leap << ": " << (n_cells - leap)
+                  << ".." << n_cells << " with " << n_parts << " parts\n";
+        std::cout.flush ();
+        assert (leap >= 1);
         assert (n_slots >= 1);
         assert (n_parts >= 1);
+        // leap = 1 isn't real leap-frogging and works with CUBES_REL, too.
+        leap = leap == 1 ? 0 : leap;
 
         // Piecing together the poly by doing one slot at a time.
         Poly poly;
@@ -250,7 +287,8 @@ public:
                 return part == (int) (pc.hash () % n_parts);
             };
             std::cout << "part " << (1 + part) << "/" << n_parts << "\n";
-            add_sprouts_way4 (n_cells, n_slots, vset2, vset, 10000, filter);
+            add_sprouts_way4 (n_cells, n_slots, leap, vset2, vset,
+                              10000, filter);
             poly += Poly (vset2);
             // This is why we are here: Purging the output each time is
             // slow but saves the memory.
