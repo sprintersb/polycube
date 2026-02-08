@@ -27,14 +27,14 @@ struct Line
     }
     struct Hash
     {
-        hash_t operator () (Line l) const
+        Hasher::type operator () (Line l) const
         {
-            return l.a.hash() + 13 * l.b.hash();
+            return Hasher::add (l.a.hash(), l.b.hash());
         }
     };
     struct SymmetricHash
     {
-        hash_t operator () (Line l) const
+        Hasher::type operator () (Line l) const
         {
             return l.a.hash() + l.b.hash();
         }

@@ -36,7 +36,7 @@ struct PolyCube
 {
     struct Hash
     {
-        hash_t operator () (const PolyCube &pc) const
+        Hasher::type operator () (const PolyCube &pc) const
         {
             return pc.hash ();
         }
@@ -85,7 +85,7 @@ struct PolyCube
     using Vector = std::vector<MuxSet>;
 private:
     Cubes m_cubes;
-    hash_t m_hash = 0;
+    Hasher::type m_hash = 0;
 public:
 
     const Cubes& cubes () const
@@ -143,7 +143,7 @@ public:
     {
         return eqne += m_cubes == c.m_cubes;
     }
-    hash_t hash () const
+    Hasher::type hash () const
     {
         return m_hash;
     }

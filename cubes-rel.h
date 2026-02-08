@@ -53,12 +53,12 @@ struct Cubes
         return sorted () == c.sorted ();
     }
     // Shift-invariant and symmetric.
-    hash_t hash () const
+    Hasher::type hash () const
     {
         const Dim m = min_cube ();
-        hash_t h = 0;
+        Hasher::type h = 0;
         for (Dim d : *this)
-            h += CCITT32::crc32_value ((d - m).ival());
+            h += Hasher() ((d - m).ival());
         return h;
     }
     bool contains (Dim d) const

@@ -59,11 +59,11 @@ public:
     {
         return this->cmp (r) == 0;
     }
-    hash_t hash () const
+    Hasher::type hash () const
     {
-        hash_t h = CCITT32::crc32_init;
+        Hasher::type h = 0;
         for (Dim d : cells)
-            h = CCITT32::crc32_add (h, d.ival());
+            h = Hasher::add (h, d.ival());
         return h;
     }
     bool contains (Dim d) const

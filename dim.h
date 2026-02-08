@@ -115,13 +115,13 @@ struct Dim
         for (int i = 0; i < size (); ++i)
             v[i] = std::max (v[i], d.v[i]);
     }
-    hash_t hash () const
+    Hasher::type hash () const
     {
-        return CCITT32::crc32_value (ival ());
+        return Hasher() (ival ());
     }
     struct Hash
     {
-        hash_t operator () (Dim d) const
+        Hasher::type operator () (Dim d) const
         {
             return d.hash ();
         }

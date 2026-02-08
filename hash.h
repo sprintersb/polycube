@@ -4,14 +4,12 @@
 
 #include <cstdint>
 
-using hash_t = uint32_t;
-
 // https://www.mrob.com/pub/comp/crc-all.html
 
 struct CCITT32
 {
-    static constexpr hash_t crc32_init = (hash_t) -1u;
-    static constexpr hash_t lookup[0x100] =
+    static constexpr uint32_t crc32_init = UINT32_MAX;
+    static constexpr uint32_t lookup[0x100] =
     {
         0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9,
         0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
@@ -79,13 +77,13 @@ struct CCITT32
         0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4,
     };
 
-    static inline constexpr hash_t crc32_step (hash_t crc, uint8_t octet)
+    static inline constexpr uint32_t crc32_step (uint32_t crc, uint8_t octet)
     {
         return (crc << 8) ^ CCITT32::lookup[(crc >> 24) ^ octet];
     }
 
     template<typename T>
-    static inline constexpr hash_t crc32_add (hash_t crc, T uval)
+    static inline constexpr uint32_t crc32_add (uint32_t crc, T uval)
     {
         for (int i = 0; i < (int) sizeof (T); ++i, uval >>= 8)
             crc = crc32_step (crc, (uint8_t) uval);
@@ -93,10 +91,72 @@ struct CCITT32
     }
 
     template<typename T>
-    static inline constexpr hash_t crc32_value (T uval)
+    static inline constexpr uint32_t crc32_value (T uval)
     {
         return crc32_add<T> (CCITT32::crc32_init, uval);
     }
 };
+
+// https://stackoverflow.com/questions/60270174/most-efficent-way-to-calculate-crc64-with-reflected-input
+
+struct CRC64
+{
+    static constexpr uint64_t crc64_init = 0;
+    static constexpr uint64_t lookup[0x100] =
+    {
+#include "crc64-lookup.def"
+    };
+
+    static inline constexpr uint64_t crc64_step (uint64_t crc, uint8_t octet)
+    {
+        return CRC64::lookup[(crc & 0xff) ^ octet] ^ (crc >> 8);
+    }
+
+    template<typename T>
+    static inline constexpr uint64_t crc64_add (uint64_t crc, T uval)
+    {
+        for (int i = 0; i < (int) sizeof (T); ++i, uval >>= 8)
+            crc = crc64_step (crc, (uint8_t) uval);
+        return crc;
+    }
+
+    template<typename T>
+    static inline constexpr uint64_t crc64_value (T uval)
+    {
+        return crc64_add<T> (CRC64::crc64_init, uval);
+    }
+};
+
+struct Hasher32
+{
+    using type = uint32_t;
+    template<typename T>
+    uint32_t operator () (T t) const
+    {
+        return CCITT32::crc32_value<T> (t);
+    }
+    template<typename T>
+    static uint32_t add (uint32_t crc, T t)
+    {
+        return CCITT32::crc32_add<T> (crc, t);
+    }
+};
+
+struct Hasher64
+{
+    using type = uint64_t;
+    template<typename T>
+    uint64_t operator () (T t) const
+    {
+        return CRC64::crc64_value<T> (t);
+    }
+    template<typename T>
+    static uint64_t add (uint64_t crc, T t)
+    {
+        return CRC64::crc64_add<T> (crc, t);
+    }
+};
+
+using Hasher = Hasher64;
 
 #endif // HASH_H
