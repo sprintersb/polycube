@@ -13,11 +13,13 @@ int main_polycube (int argc, char *argv[])
     int level = 10;
     int way = 0;
     int extra_spice = 0;
+    int leap = 1;
 
     if (argc > 1)   sscanf (argv[1], "%i", &dim);
     if (argc > 2)   sscanf (argv[2], "%i", &level);
     if (argc > 3)   sscanf (argv[3], "%i", &way);
     if (argc > 4)   sscanf (argv[4], "%i", &extra_spice);
+    if (argc > 5)   sscanf (argv[5], "%i", &leap);
 
 #if defined CUBES_REL
     std::cout << "CUBES_REL  DIM=" << DIM << "\n";
@@ -32,6 +34,8 @@ int main_polycube (int argc, char *argv[])
 #ifdef CUBES_ARRAY
     assert (level == CELLS);
 #endif
+    if (way == 5)
+        assert (level - leap >= 1);
 
     const int max_threads = omp_get_max_threads ();
     std::cout << "Max threads: " << max_threads << "\n";
@@ -81,13 +85,25 @@ int main_polycube (int argc, char *argv[])
                     return (max_corona <= 0
                             || ! pc.has_large_corona (max_corona));
                 };
-                PolyCube::add_sprouts_way4 (i, n_slots, vset[i], vset[i - 1],
+                PolyCube::add_sprouts_way4 (i, n_slots, 0, vset[i], vset[i - 1],
                                             100000, filter);
             }
             else if (way == 5)
-                poly = PolyCube::get_sprouts_poly_way5 (level, i, n_slots,
-                                                        extra_spice,
-                                                        vset[i], vset[i - 1]);
+            {
+                if (i <= level - leap)
+                    poly = PolyCube::get_sprouts_poly_way5 (i, n_slots,
+                                                            extra_spice, 0,
+                                                            vset[i], vset[i - 1]);
+                else if (i == level)
+                    poly = PolyCube::get_sprouts_poly_way5 (i, n_slots,
+                                                            extra_spice, leap,
+                                                            vset[i], vset[i - leap]);
+                else
+                {
+                    std::cout << "leaped\n";
+                    continue;
+                }
+            }
             else if (way == 0)
             {
                 for (const auto &pc : set[i - 1])

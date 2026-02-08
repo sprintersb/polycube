@@ -37,8 +37,10 @@ all: dorun
 dorun: $(OBJS) $(EXTRA_DEP)
 	$(GXX) $(HOST_CXXFLAGS) $(OBJS) -o $@ -Wl,--gc-sections -lm
 
+NICE ?= 20
+
 run: dorun
-	time nice -20 ./$< $(ARGS)
+	time nice -$(NICE) ./$< $(ARGS)
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
