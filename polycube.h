@@ -43,6 +43,8 @@ struct PolyCube : Cubes
     };
     using Set = std::unordered_set<PolyCube, Hash>;
 
+    static inline bool canonical_only;
+
     PolyCube (const PolyCube *dad, Dim d) : Cubes (dad, d) {}
 
 #pragma omp declare reduction(merge : Set : merge (omp_out, omp_in))    \
@@ -69,6 +71,10 @@ struct PolyCube : Cubes
 
 public:
 
+    void canonicalize ()
+    {
+        Cubes::canonicalize ();
+    }
     Corona corona () const
     {
         Corona cora;
@@ -143,15 +149,20 @@ public:
                 for (Dim d : dad.corona())
                     if (PolyCube pc (&dad, d); i < leap)
                         pcs[i].emplace (std::move (pc));
-                    else if (! filter || filter (pc))
+                    else
                     {
-                        MuxSet &slot = vms[pc.hash () % vms.size ()];
+                        if (PolyCube::canonical_only)
+                            pc.canonicalize ();
+                        if (! filter || filter (pc))
+                        {
+                            MuxSet &slot = vms[pc.hash () % vms.size ()];
 
-                        slot.mux.lock ();
-                        const auto n = slot.set.size ();
-                        slot.set.emplace (std::move (pc));
-                        new_count += n != slot.set.size ();
-                        slot.mux.unlock ();
+                            slot.mux.lock ();
+                            const auto n = slot.set.size ();
+                            slot.set.emplace (std::move (pc));
+                            new_count += n != slot.set.size ();
+                            slot.mux.unlock ();
+                        }
                     }
         }
         return new_count;
@@ -163,6 +174,8 @@ public:
         for (Dim d : corona())
         {
             PolyCube pc (this, d);
+            if (PolyCube::canonical_only)
+                pc.canonicalize ();
             set.emplace (std::move (pc));
         }
     }
@@ -174,6 +187,8 @@ public:
         for (Dim d : corona())
         {
             PolyCube pc (this, d);
+            if (PolyCube::canonical_only)
+                pc.canonicalize ();
             if (filter && ! filter (pc))
                 continue;
             MuxSet &slot = vms[pc.hash () % vms.size ()];
@@ -268,12 +283,13 @@ public:
         {
             for (const auto &pc : set)
             {
+                int multi = PolyCube::canonical_only ? pc.multiplicity() : 1;
                 const int coro = pc.corona().size ();
                 const auto &monome = a_.find (coro);
                 if (monome == a_.end ())
-                    a_[coro] = 1;
+                    a_[coro] = multi;
                 else
-                    monome->second += 1;
+                    monome->second += multi;
             }
         }
 
@@ -342,7 +358,7 @@ public:
                 {
                     const int coro = pc.corona().size ();
                     assert (coro < (int) v.size ());
-                    w[coro] += 1;
+                    w[coro] += PolyCube::canonical_only ? pc.multiplicity() : 1;
                 }
                 for (size_t j = 0; j < v.size (); ++j)
                     if (w[j])
@@ -362,7 +378,7 @@ public:
                 {
                     const int coro = pc.corona().size ();
                     assert (coro < (int) v.size ());
-                    w[coro] += 1;
+                    w[coro] += PolyCube::canonical_only ? pc.multiplicity() : 1;
                 }
                 vecadd (v, w);
             }

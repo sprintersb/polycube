@@ -17,7 +17,7 @@
 
 struct CubesVectIterator;
 struct CubesRel;
-
+struct Pad;
 struct CubesVect
 {
 private:
@@ -110,45 +110,40 @@ public:
         return m;
     }
 public:
-    CubesVect rotated () const
+    CubesVect rotated (int i, int j) const
     {
-        const int xm = max_coord (0);
+        const int xm = max_coord (i);
         CubesVect c;
         for (Dim d : cells)
         {
-            int y = xm - d[0];
-            d.set (0, d[1]);
-            d.set (1, y);
+            int y = xm - d[i];
+            d.set (i, d[j]);
+            d.set (j, y);
             c.add (d);
         }
         return c;
     }
-    CubesVect mirrored () const
+    CubesVect mirrored (int i) const
     {
-        const int m = max_coord (0);
+        const int m = max_coord (i);
         CubesVect c;
         for (Dim d : cells)
         {
-            d.set (0, m - d[0]);
+            d.set (i, m - d[i]);
             c.add (d);
         }
         return c;
     }
-    bool maybe_canonical () const
-    {
-        const Box bb = bounding_box ();
-        assert (bb.lo == Dim::all(0));
-        for (int j = 1; j < bb.hi.size (); ++j)
-            if (bb.hi[j] > bb.hi[j - 1])
-                return false;
-        return true;
-    }
-    bool is_canonical () const
-    {
-        return maybe_canonical () && *this == canonical ();
-    }
+    Pad congruents () const;
+    bool is_canonical () const;
+    void canonicalize ();
     int multiplicity () const;
-    const CubesVect& canonical () const;
+    CubesVect canonical () const
+    {
+        CubesVect c (*this);
+        c.canonicalize ();
+        return c;
+    }
     CubesVectIterator begin () const;
     CubesVectIterator end () const;
     CubesVectIterator cbegin () const;
@@ -186,49 +181,66 @@ inline CubesVectIterator CubesVect::end () const   { return cend (); }
 
 struct Pad : std::vector<CubesVect>
 {
-    static Pad& get ();
-    void add (const CubesVect &c)
+    bool add (const CubesVect &c)
     {
         for (auto it = begin (); ; ++it)
             if (int i; it == end () || (i = c.cmp (*it)) < 0)
             {
                 std::vector<CubesVect>::insert (it, c);
-                break;
+                return true;
             }
             else if (i == 0)
                 break;
+        return false;
     }
 };
 
-using ScratchPads = std::vector<Pad>;
-inline ScratchPads pads = ScratchPads (omp_get_max_threads ());
-
-inline Pad& Pad::get ()
-{
-    return pads.at (omp_get_thread_num ());
-}
-
-const CubesVect& CubesVect::canonical () const
+Pad CubesVect::congruents () const
 {
     CubesVect c (*this);
-    Pad& pad = Pad::get ();
-    pad.reserve (8);
-    pad[0] = c;
-    for (int i = 1; i < 8; ++i)
-        if (c = i % 4 == 3 ? c.mirrored() : c.rotated(); c.maybe_canonical ())
-            pad.add (c);
-    return pad[0];
+    Pad pad;
+    if (DIM == 2)
+    {
+        pad.reserve (8);
+        pad.resize (1, c);
+        for (int i = 0; i < 7; ++i)
+            pad.add (c = i == 3 ? c.mirrored(0) : c.rotated(0,1));
+    }
+    else if (DIM == 3)
+    {
+        pad.reserve (48);
+        pad.resize (1, c);
+        using F = CubesVect (*)(const CubesVect&);
+        static const F fun[] =
+        {
+            [](const CubesVect &c) -> CubesVect { return c.mirrored (0); },
+            [](const CubesVect &c) -> CubesVect { return c.rotated (0, 1); },
+            [](const CubesVect &c) -> CubesVect { return c.rotated (1, 2); },
+            [](const CubesVect &c) -> CubesVect { return c.rotated (2, 0); },
+        };
+        for (auto s = ("12121 3 12121 3 12121 1 12121 0"
+                       "12121 3 12121 3 12121 1 12121"); *s; ++s)
+            if (s[0] != ' ')
+                pad.add (c = fun[s[0] - '0'] (c));
+    }
+    else
+        assert (0 && "todo: canonicalize in DIM");
+    return pad;
+}
+
+void CubesVect::canonicalize ()
+{
+    cells = std::move (congruents()[0].cells);
+}
+
+bool CubesVect::is_canonical () const
+{
+    return *this == congruents()[0];
 }
 
 int CubesVect::multiplicity () const
 {
-    CubesVect c (*this);
-    Pad& pad = Pad::get ();
-    pad.reserve (8);
-    pad[0] = c;
-    for (int i = 1; i < 8; ++i)
-        pad.add (c = i % 4 == 3 ? c.mirrored() : c.rotated());
-    return pad.size ();
+    return (int) congruents().size ();
 }
 
 #undef  CUBES

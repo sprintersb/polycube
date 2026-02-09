@@ -21,6 +21,13 @@ int main_polycube (int argc, char *argv[])
     if (argc > 4)   sscanf (argv[4], "%i", &extra_spice);
     if (argc > 5)   sscanf (argv[5], "%i", &leap);
 
+#ifdef CUBES_REL
+    // There is no way we can possibly canonicalize these,
+    PolyCube::canonical_only = 0;
+#else
+    PolyCube::canonical_only = way > 0;
+#endif
+
 #if defined CUBES_ARRAY
     std::cout << "CUBES_ARRAY  DIM=" << DIM << "  CELLS=" << CELLS << "\n";
 #else
@@ -50,6 +57,7 @@ int main_polycube (int argc, char *argv[])
 
     max_possible_corona = 2 * (dim - 1) * level + 2;
     std::cout << "maxi corona: " << max_possible_corona << "\n";
+    std::cout << "canonical o: " << PolyCube::canonical_only << "\n";
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0
     std::vector<PolyCube::Vector> vset (1 + level); // Way 4, 5
@@ -114,31 +122,18 @@ int main_polycube (int argc, char *argv[])
             }
         }
 
-        uint64_t ccount = -1;
-
         if (way == 4)
-        {
-            int n_polycubes = 0;
-            for (const auto &ms : vset[i])
-                n_polycubes += ms.set.size ();
-            ccount = n_polycubes;
             poly = PolyCube::Poly (vset[i]);
-        }
-        else if (way == 5)
-            ccount = poly (1);
         else if (way == 0)
-        {
-            ccount = set[i].size();
             poly = PolyCube::Poly (set[i]);
-        }
+
+        uint64_t ccount = poly (1);
 
         smallest_corona[i] = poly.a_.begin ()->first;
         std::cout << ccount << " polycubes"
                   << "  (coro min: " << smallest_corona[i] << ")\n";
-        std::cout << "NE/EQ = " << eqne << "\n";
-        eqne.reset();
 
-        //poly.print (i, PolyCube::Poly::POLY_TEX);
+        poly.print (i, PolyCube::Poly::POLY_TEX);
         std::cout.flush();
 
         if (way == 4 && extra_spice > 0)

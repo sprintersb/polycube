@@ -62,6 +62,10 @@ struct CubesRel
     {
         return sorted().multiplicity ();
     }
+    void canonicalize () const
+    {
+        assert (0 && "this is impossible");
+    }
     // Shift-invariant and symmetric.
     Hasher::type hash () const
     {
