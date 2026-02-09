@@ -2,7 +2,7 @@
 #ifndef CUBES_REL_H
 #define CUBES_REL_H
 
-// Cubes refers to smaller cubes for memory footprint.
+// CubesRel refers to smaller cubes for memory footprint.
 
 #include <string>
 #include <set>
@@ -14,15 +14,15 @@
 #error use #include "cubes.h"
 #endif
 
-struct Cubes
+struct CubesRel
 {
     struct CIterator;
 
-    const Cubes *dad = nullptr;
+    const CubesRel *dad = nullptr;
     Dim cube;
 
-    Cubes () {}
-    Cubes (const Cubes *dad, Dim d) : dad(dad), cube(d) {}
+    CubesRel () {}
+    CubesRel (const CubesRel *dad, Dim d) : dad(dad), cube(d) {}
 
     int size () const
     {
@@ -38,19 +38,29 @@ struct Cubes
             d.min (p->cube);
         return d;
     }
-    using SortedCubes = std::set<Dim>;
+    // As is seems, for the sizes of interest, the execution times are:
+    // CubesVect(array) < CubesVect(vector) < set<Dim> < unordered_set<Dim>.
+    using SortedCubes = CubesVect;
     SortedCubes sorted () const
     {
         const Dim m = min_cube ();
         SortedCubes set;
         for (Dim d : *this)
-            set.emplace (d - m);
+            set.add (d - m);
         return set;
     }
     // Symmetric in cubes and shift-invariant but quite expensive.
-    bool operator == (const Cubes &c) const
+    bool operator == (const CubesRel &c) const
     {
         return sorted () == c.sorted ();
+    }
+    bool is_canonical () const
+    {
+        return sorted().is_canonical ();
+    }
+    int multiplicity () const
+    {
+        return sorted().multiplicity ();
     }
     // Shift-invariant and symmetric.
     Hasher::type hash () const
@@ -71,7 +81,7 @@ struct Cubes
 
     struct CIterator
     {
-        const Cubes *ptr;
+        const CubesRel *ptr;
         void operator ++ () { ptr = ptr->dad; }
         bool operator == (const CIterator &r) const { return ptr == r.ptr; }
         bool operator != (const CIterator &r) const { return ptr != r.ptr; }
@@ -83,9 +93,15 @@ struct Cubes
     CIterator cbegin () const { return CIterator { this }; }
     CIterator cend ()   const { return CIterator { nullptr }; }
 
-#include "cubes-common.def"
+    // Common tail.
+public:
+    Box bounding_box () const;
+    std::string ascii (char c = '*') const;
+    friend std::ostream& operator << (std::ostream&, const CubesRel&);
 };
 
-using CubesIterator = Cubes::CIterator;
+#undef  CUBES
+#define CUBES CubesRel
+#include "cubes-common.def"
 
 #endif // CUBES_REL_H

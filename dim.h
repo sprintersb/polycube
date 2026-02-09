@@ -62,7 +62,7 @@ struct Dim
     }
     void set (int i, int val)
     {
-#if defined CUBES_ARRAY && !defined CUBES_REL
+#if defined CUBES_ARRAY
         // v[i] = Gives warning with CUBES_ARRAY.
         vector_t w(v);
         w[i] = (Dim::value_t) val;
