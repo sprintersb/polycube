@@ -143,7 +143,7 @@ int main_polycube (int argc, char *argv[])
             PolyCube::Set small_corona = PolyCube::find_min_corona (vset[i]);
             if (! small_corona.empty ())
             {
-                const auto &best = small_corona.begin()->cubes();
+                const auto &best = * small_corona.begin();
                 std::cout << best.ascii ();
                 std::cout << BorderFinder (best).border().svg() << "\n";
             }
@@ -159,11 +159,11 @@ int main_polycube (int argc, char *argv[])
             for (const auto &ms: vset[i])
                 for (const auto &pc : ms.set)
                 {
-                    auto &&ps = BorderFinder (pc.cubes()).border();
+                    auto &&ps = BorderFinder (pc).border();
                     for (const auto &pgon : ps)
                     {
                         std::cout << pgon;
-                        std::cout << pc.cubes().ascii ();
+                        std::cout << pc.ascii ();
                     }
                 }
     }

@@ -32,7 +32,7 @@ BoolCounter eqne;
 
 inline int max_possible_corona;
 
-struct PolyCube
+struct PolyCube : Cubes
 {
     struct Hash
     {
@@ -43,26 +43,9 @@ struct PolyCube
     };
     using Set = std::unordered_set<PolyCube, Hash>;
 
-    PolyCube (const PolyCube *dad, Dim d)
-        : m_cubes(dad ? & dad->m_cubes : nullptr, d)
-        , m_hash (m_cubes.hash ())
-    {}
+    PolyCube (const PolyCube *dad, Dim d) : Cubes (dad, d) {}
 
-    struct Iterator
-    {
-        CubesIterator it;
-        void operator ++ () { ++it; };
-        bool operator == (const Iterator &r) const { return it == r.it; }
-        bool operator != (const Iterator &r) const { return it != r.it; }
-        Dim operator * () const { return *it; }
-    };
-    Iterator begin () const  { return Iterator { m_cubes.cbegin () }; }
-    Iterator end () const    { return Iterator { m_cubes.cend () }; }
-    Iterator cbegin () const { return Iterator { m_cubes.cbegin () }; }
-    Iterator cend () const   { return Iterator { m_cubes.cend () }; }
-    using const_iterator = Iterator;
-
-#pragma omp declare reduction(merge : Set : merge (omp_out, omp_in)) \
+#pragma omp declare reduction(merge : Set : merge (omp_out, omp_in))    \
     initializer (omp_priv = omp_orig)
 
     static void merge (Set &sout, Set &sin)
@@ -83,34 +66,17 @@ struct PolyCube
         Set set;
     };
     using Vector = std::vector<MuxSet>;
-private:
-    Cubes m_cubes;
-    Hasher::type m_hash = 0;
+
 public:
 
-    const Cubes& cubes () const
-    {
-        return m_cubes;
-    }
-    bool contains (Dim d) const
-    {
-        for (Dim x : *this)
-            if (x == d)
-                return true;
-        return false;
-    }
     Corona corona () const
     {
         Corona cora;
         for (Dim d : *this)
             for (Dim delta : d)
-                if (! contains (d + delta))
+                if (! Cubes::contains (d + delta))
                     cora.add (d + delta);
         return cora;
-    }
-    Box bounding_box () const
-    {
-        return m_cubes.bounding_box ();
     }
     bool has_large_corona (int max_corona) const
     {
@@ -118,7 +84,7 @@ public:
         if (cora.size () > max_corona)
             return true;
         // O.b.d.A. the bounding box is oriented in a canonical way.
-        const Box bb = bounding_box ();
+        const Box bb = Cubes::bounding_box ();
         const Dim diam = bb.hi - bb.lo;
         for (int j = 1; j < diam.size (); ++j)
             if (diam[j] > diam[j - 1])
@@ -139,14 +105,6 @@ public:
         return false; // Only weakly false, i.e. not necessarily convex.
     }
 
-    bool operator == (const PolyCube &c) const
-    {
-        return eqne += m_cubes == c.m_cubes;
-    }
-    Hasher::type hash () const
-    {
-        return m_hash;
-    }
     static Set find_min_corona (const Vector &vms)
     {
         Set set;
@@ -457,7 +415,7 @@ public:
 
 inline std::ostream& operator << (std::ostream &ost, const PolyCube &pc)
 {
-    ost << "cubes: " << pc.cubes() << "\n";
+    ost << "cubes: " << static_cast<Cubes> (pc) << "\n";
     ost << "coron: " << pc.corona() << "\n";
     return ost;
 }
