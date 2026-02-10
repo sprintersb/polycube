@@ -36,6 +36,34 @@ int64_t cube_count (int dim, int n_cells)
         ? cube_counts[dim][n_cells]
         : -1;
 }
+
+int64_t cube_count_canon (int dim, int n_cells)
+{
+    static const std::array<std::vector<int64_t>, 4 + 1> cube_counts =
+    {
+        {
+            {},
+            {},
+            // n = 2: https://oeis.org/A000105
+            { 1, 1, 1, 2, 5, 12, 35, 108, 369, 1285, 4655, 17073, 63600,
+              238591, 901971, 3426576, 13079255, 50107909, 192622052,
+              742624232, 2870671950, 11123060678, 43191857688, 168047007728,
+              654999700403, 2557227044764, 9999088822075, 39153010938487,
+              153511100594603 },
+            // n = 3: https://oeis.org/A038119
+            { 1, 1, 1, 2, 7, 23, 112, 607, 3811, 25413, 178083, 1279537,
+              9371094, 69513546, 520878101, 3934285874, 29915913663,
+              228779330204, 1758309223457, 13573319825615, 105192814197984,
+              818136047201932, 6383528588447574 },
+            // n = 4: https://oeis.org/
+            { }
+        }
+    };
+    return ((size_t) dim < cube_counts.size ()
+            && (size_t) n_cells < cube_counts[dim].size ())
+        ? cube_counts[dim][n_cells]
+        : -1;
+}
 } // anon
 #endif // POLYCUBE_COUNT_H
 

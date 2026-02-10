@@ -44,6 +44,11 @@ run: dorun
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
+.PHONY: progress
+
+progress:
+	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp && ./prog.x
+
 clean:
 	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)
 	rm -f -- $(wildcard *.lst *.lss *.out *.map)

@@ -97,7 +97,7 @@ int main_polycube (int argc, char *argv[])
                             || ! pc.has_large_corona (max_corona));
                 };
                 PolyCube::add_sprouts_way4 (i, n_slots, 0, vset[i], vset[i - 1],
-                                            100000, filter);
+                                            200, filter, nullptr);
             }
             else if (way == 5)
             {

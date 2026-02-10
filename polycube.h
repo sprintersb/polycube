@@ -32,6 +32,15 @@ BoolCounter eqne;
 
 inline int max_possible_corona;
 
+using Pro64 = Progress<int64_t>;
+Pro64::Printer pprint64 =
+    [] (std::ostringstream &ost, Pro64 &p, int64_t i) -> void
+    {
+        ost << i << " Cubs";
+        if (p.total > 0)
+            ost << " = " << 100.0 * i / p.total << "%";
+    };
+
 struct PolyCube : Cubes
 {
     struct Hash
@@ -205,16 +214,19 @@ public:
     // Way 4
     static void add_sprouts_way4 (int n_cells, int n_slots, int leap,
                                   Vector &vset2, const Vector &vset,
-                                  int progress_at, Filter filter)
+                                  int progress_at, Filter filter,
+                                  Pro64::Printer pp)
     {
+        progress_at *= omp_get_max_threads ();
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex
 
         // Only for printing stat.
-        const int64_t n_cubes = cube_count (DIM, n_cells);
+        const int64_t n_cubes = PolyCube::canonical_only
+            ? cube_count_canon (DIM, n_cells)
+            : cube_count (DIM, n_cells);
         std::atomic<int64_t> pc_count = 0;
-        Progress<int64_t> pro (PROGRESS_WITH_TOTAL, n_cubes, progress_at,
-                               "%" PRIi64 " Cubs = %.2f%%");
+        Pro64 pro (n_cubes, progress_at, pp && n_cubes > 0 ? pp : pprint64);
 
 #pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < vset.size (); ++j)
@@ -238,7 +250,7 @@ public:
         if (! leap)
         {
             add_sprouts_way4 (n_cells, n_slots, 0, vset2, vset,
-                              100000, nullptr);
+                              200, nullptr, nullptr);
             return Poly (vset2);
         }
         std::cout << "leaping " << leap << ": " << (n_cells - leap)
@@ -253,6 +265,11 @@ public:
         // Piecing together the poly by doing one slot at a time.
         Poly poly;
         n_slots = 2 + n_slots / n_parts;
+        Pro64::Printer pbar =
+            [n_parts] (std::ostringstream &ost, Pro64 &p, int64_t i) -> void
+            {
+                p.print_bar (ost, 79, (double) n_parts * i / p.total);
+            };
         for (int part = 0; part < n_parts; ++part)
         {
             const Filter filter = [part, n_parts] (const PolyCube &pc)
@@ -261,7 +278,7 @@ public:
             };
             std::cout << "part " << (1 + part) << "/" << n_parts << "\n";
             add_sprouts_way4 (n_cells, n_slots, leap, vset2, vset,
-                              10000, filter);
+                              1 + 200 / n_parts, filter, pbar);
             poly += Poly (vset2);
             // This is why we are here: Purging the output each time is
             // slow but saves the memory.
