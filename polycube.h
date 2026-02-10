@@ -273,8 +273,9 @@ public:
     // Univariate polynomial over Z in sparse representation.
     struct Poly
     {
+        using T = int64_t;
         enum { POLY_TEX, POLY_LIST };
-        std::map<int,int> a_;
+        std::map<int,T> a_;
 
         Poly () {}
 
@@ -305,7 +306,7 @@ public:
             for (const auto &q_mono : q.a_)
             {
                 const int expo = q_mono.first;
-                const int coef = q_mono.second;
+                const T coef = q_mono.second;
                 const auto &p_mono = a_.find (expo);
                 if (p_mono == a_.end ())
                     a_[expo] = coef;
@@ -329,10 +330,10 @@ public:
     initializer (omp_priv = omp_orig)
 
 #pragma omp declare                                                     \
-    reduction (vecadd : std::vector<int> : vecadd (omp_out, omp_in))    \
+    reduction (vecadd : std::vector<T> : vecadd (omp_out, omp_in))      \
     initializer (omp_priv = omp_orig)
 
-        static void vecadd (std::vector<int> &a, const std::vector<int> &b)
+        static void vecadd (std::vector<T> &a, const std::vector<T> &b)
         {
             assert (a.size () == b.size ());
             for (size_t j = 0; j < a.size (); ++j)
@@ -347,13 +348,13 @@ public:
             for (size_t j = 0; j < vms.size (); ++j)
                 poly += Poly (vms[j].set);
 #elif 1
-            std::vector<std::atomic<int>> v (1 + max_possible_corona);
+            std::vector<std::atomic<T>> v (1 + max_possible_corona);
             for (size_t j = 0; j < v.size (); ++j)
                 v[j] = 0;
 #pragma omp parallel for schedule(dynamic)
             for (size_t j = 0; j < vms.size (); ++j)
             {
-                std::vector<int> w (1 + max_possible_corona, 0);
+                std::vector<T> w (1 + max_possible_corona, 0);
                 for (const auto &pc : vms[j].set)
                 {
                     const int coro = pc.corona().size ();
@@ -369,11 +370,11 @@ public:
                 if (v[j] != 0)
                     poly.a_[j] = v[j];
 #else
-            std::vector<int> v (1 + max_possible_corona, 0);
+            std::vector<T> v (1 + max_possible_corona, 0);
 #pragma omp parallel for schedule(dynamic) reduction(vecadd: v)
             for (size_t j = 0; j < vms.size (); ++j)
             {
-                std::vector<int> w (1 + max_possible_corona, 0);
+                std::vector<T> w (1 + max_possible_corona, 0);
                 for (const auto &pc : vms[j].set)
                 {
                     const int coro = pc.corona().size ();
@@ -404,7 +405,7 @@ public:
                     if (!start)
                         printf (" + ");
                     if (m.second != 1)
-                        printf ("%d", m.second);
+                        printf ("%" PRIi64, m.second);
                     printf (m.first < 10 ? "%s^%d" : "%s^{%d}", var, m.first);
                     start = false;
                 }
@@ -418,7 +419,7 @@ public:
                 {
                     if (!start)
                         printf (", ");
-                    printf ("%d,%d", m.second, m.first);
+                    printf ("%" PRIi64 ",%d", m.second, m.first);
                     start = false;
                 }
                 printf (" }\n");
