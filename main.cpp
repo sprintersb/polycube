@@ -102,13 +102,15 @@ int main_polycube (int argc, char *argv[])
             else if (way == 5)
             {
                 if (i <= level - leap)
-                    poly = PolyCube::get_sprouts_poly_way5 (i, n_slots,
-                                                            extra_spice, 0,
-                                                            vset[i], vset[i - 1]);
+                    poly = PolyCube
+                        ::get_sprouts_poly_way5 (i, n_slots,
+                                                 extra_spice, 0,
+                                                 vset[i], vset[i - 1]);
                 else if (i == level)
-                    poly = PolyCube::get_sprouts_poly_way5 (i, n_slots,
-                                                            extra_spice, leap,
-                                                            vset[i], vset[i - leap]);
+                    poly = PolyCube
+                        ::get_sprouts_poly_way5 (i, n_slots,
+                                                 extra_spice, leap,
+                                                 vset[i], vset[i - leap]);
                 else
                 {
                     std::cout << "leaped\n";

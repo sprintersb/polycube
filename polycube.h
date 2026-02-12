@@ -189,6 +189,12 @@ public:
         }
     }
 
+    static int64_t expected_count (int n_cells)
+    {
+        return PolyCube::canonical_only
+            ? cube_count_canon (DIM, n_cells)
+            : cube_count (DIM, n_cells);
+    }
     // Way 4, 5
     int add_sprouts_way4_5 (Vector &vms, Filter filter) const
     {
@@ -212,20 +218,22 @@ public:
     }
 
     // Way 4
-    static void add_sprouts_way4 (int n_cells, int n_slots, int leap,
-                                  Vector &vset2, const Vector &vset,
-                                  int progress_at, Filter filter,
-                                  Pro64::Printer pp)
+    static int64_t add_sprouts_way4 (int n_cells, int n_slots, int leap,
+                                     Vector &vset2, const Vector &vset,
+                                     int progress_at, Filter filter,
+                                     Pro64::Printer pp)
     {
         progress_at *= omp_get_max_threads ();
         Vector v (n_slots);
         vset2.swap (v); // Since resize() doesn't like std::mutex
 
         // Only for printing stat.
-        const int64_t n_cubes = PolyCube::canonical_only
-            ? cube_count_canon (DIM, n_cells)
-            : cube_count (DIM, n_cells);
+        const int64_t n_cubes = PolyCube::expected_count (n_cells);
         std::atomic<int64_t> pc_count = 0;
+        if (n_cubes > 0 && leap == 0)
+            std::cout << n_cubes
+                      << (PolyCube::canonical_only ? " free" : " fixed")
+                      << " cubs expected\n";
         Pro64 pro (n_cubes, progress_at, pp && n_cubes > 0 ? pp : pprint64);
 
 #pragma omp parallel for schedule(dynamic)
@@ -240,6 +248,15 @@ public:
             if (omp_get_thread_num () == 0)
                 pro.update (pc_count);
         } // parallel for
+        pro.done ();
+        if (leap == 0)
+            std::cout << pc_count
+                      << (PolyCube::canonical_only ? " free" : " fixed")
+                      << " cubs found\n";
+        if (n_cubes > 0 && leap == 0 && pc_count != n_cubes)
+            std::cout << "error: expected " << n_cubes << " != "
+                      << pc_count << "\n";
+        return pc_count;
     }
 
     struct Poly;
@@ -253,6 +270,11 @@ public:
                               200, nullptr, nullptr);
             return Poly (vset2);
         }
+        const int64_t n_cubes = PolyCube::expected_count (n_cells);
+        if (n_cubes > 0)
+            std::cout << n_cubes
+                      << (PolyCube::canonical_only ? " free" : " fixed")
+                      << " cubs expected\n";
         std::cout << "leaping " << leap << ": " << (n_cells - leap)
                   << ".." << n_cells << " with " << n_parts << " parts\n";
         std::cout.flush ();
@@ -270,6 +292,7 @@ public:
             {
                 p.print_bar (ost, 79, (double) n_parts * i / p.total);
             };
+        int64_t pc_count = 0;
         for (int part = 0; part < n_parts; ++part)
         {
             const Filter filter = [part, n_parts] (const PolyCube &pc)
@@ -277,13 +300,19 @@ public:
                 return part == (int) (pc.hash () % n_parts);
             };
             std::cout << "part " << (1 + part) << "/" << n_parts << "\n";
-            add_sprouts_way4 (n_cells, n_slots, leap, vset2, vset,
-                              1 + 200 / n_parts, filter, pbar);
+            pc_count += add_sprouts_way4 (n_cells, n_slots, leap, vset2, vset,
+                                          1 + 200 / n_parts, filter, pbar);
             poly += Poly (vset2);
             // This is why we are here: Purging the output each time is
             // slow but saves the memory.
             vset2.clear ();
         }
+        std::cout << pc_count
+                  << (PolyCube::canonical_only ? " free" : " fixed")
+                  << " cubs found\n";
+        if (n_cubes > 0 && pc_count != n_cubes)
+            std::cout << "error: expected " << n_cubes << " != "
+                      << pc_count << "\n";
         return poly;
     }
 
