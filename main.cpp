@@ -25,7 +25,7 @@ int main_polycube (int argc, char *argv[])
     // There is no way we can possibly canonicalize these,
     PolyCube::canonical_only = 0;
 #else
-    PolyCube::canonical_only = way > 0;
+    PolyCube::canonical_only = way > 0 && (2 <= dim && dim <= 4);
 #endif
 
 #if defined CUBES_ARRAY

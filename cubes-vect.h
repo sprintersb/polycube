@@ -197,34 +197,54 @@ struct Pad : std::vector<CubesVect>
 
 Pad CubesVect::congruents () const
 {
-    CubesVect c (*this);
+    using CV = CubesVect;
+    using F = CV (*)(const CV&);
+    CV c (*this);
     Pad pad;
-    if (DIM == 2)
-    {
-        pad.reserve (8);
-        pad.resize (1, c);
-        for (int i = 0; i < 7; ++i)
-            pad.add (c = i == 3 ? c.mirrored(0) : c.rotated(0,1));
-    }
-    else if (DIM == 3)
-    {
-        pad.reserve (48);
-        pad.resize (1, c);
-        using F = CubesVect (*)(const CubesVect&);
-        static const F fun[] =
+    const char *S = "";
+#if DIM == 2
+    pad.reserve (8);
+    static const F fun[] =
         {
-            [](const CubesVect &c) -> CubesVect { return c.mirrored (0); },
-            [](const CubesVect &c) -> CubesVect { return c.rotated (0, 1); },
-            [](const CubesVect &c) -> CubesVect { return c.rotated (1, 2); },
-            [](const CubesVect &c) -> CubesVect { return c.rotated (2, 0); },
+            [](const CV &c) -> CV { return c.mirrored (0); },
+            [](const CV &c) -> CV { return c.rotated (0, 1); },
         };
-        for (auto s = ("12121 3 12121 3 12121 1 12121 0"
-                       "12121 3 12121 3 12121 1 12121"); *s; ++s)
-            if (s[0] != ' ')
-                pad.add (c = fun[s[0] - '0'] (c));
-    }
-    else
-        assert (0 && "todo: canonicalize in DIM");
+    S = "111" "0" "111";
+#elif DIM == 3
+    pad.reserve (48);
+    static const F fun[] =
+        {
+            [](const CV &c) -> CV { return c.mirrored (0); },
+            [](const CV &c) -> CV { return c.rotated (0, 1); },
+            [](const CV &c) -> CV { return c.rotated (1, 2); },
+            [](const CV &c) -> CV { return c.rotated (2, 0); },
+        };
+    S = ("12121 3 12121 3 12121 1 12121 0"
+         "12121 3 12121 3 12121 1 12121");
+#elif DIM == 4
+    pad.reserve (2 * 192);
+    static const F fun[] =
+        {
+            [](const CV &c) -> CV { return c.mirrored (0); },
+            [](const CV &c) -> CV { return c.rotated (0, 1); }, // 1
+            [](const CV &c) -> CV { return c.rotated (0, 2); }, // 2
+            [](const CV &c) -> CV { return c.rotated (1, 2); }, // 3
+            [](const CV &c) -> CV { return c.rotated (2, 1); }, // 4
+            [](const CV& c) -> CV { return c.rotated (3, 0); }, // 5
+            [](const CV& c) -> CV { return c.rotated (3, 1); }, // 6
+        };
+#define M "11121113111311141112111"
+    S = (M "5" M "5" M "6" M "5" M "6" M "5" M "5" M "0"
+         M "5" M "5" M "6" M "5" M "6" M "5" M "5" M);
+#undef M
+#else
+    static const F fun[] = {};
+    assert (0 && "todo: canonicalize in DIM");
+#endif
+    pad.resize (1, c);
+    for (auto s = S; *s; ++s)
+        if (*s != ' ')
+            pad.add (c = fun[*s - '0'] (c));
     return pad;
 }
 

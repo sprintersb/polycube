@@ -44,10 +44,15 @@ run: dorun
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
-.PHONY: progress
+.PHONY: progress rotor
 
 progress:
-	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp && ./prog.x
+	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp
+	./prog.x
+
+rotor:
+	g++ test-rotation.cpp -o rotor.x -Wall -O3 -fopenmp $(ARGS)
+	./rotor.x
 
 clean:
 	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)
