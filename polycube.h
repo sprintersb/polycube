@@ -98,13 +98,6 @@ public:
         const Corona &cora = corona ();
         if (cora.size () > max_corona)
             return true;
-        // O.b.d.A. the bounding box is oriented in a canonical way.
-        const Box bb = Cubes::bounding_box ();
-        const Dim diam = bb.hi - bb.lo;
-        for (int j = 1; j < diam.size (); ++j)
-            if (diam[j] > diam[j - 1])
-            return true;
-
         // Try some simple convexity tests.  Use an unordered_set for faster
         // accesses.  Additional size doesn't matter here.
         Corona cubs;
@@ -230,7 +223,7 @@ public:
         // Only for printing stat.
         const int64_t n_cubes = PolyCube::expected_count (n_cells);
         std::atomic<int64_t> pc_count = 0;
-        if (n_cubes > 0 && leap == 0)
+        if (! filter && n_cubes > 0 && leap == 0)
             std::cout << n_cubes
                       << (PolyCube::canonical_only ? " free" : " fixed")
                       << " cubs expected\n";
@@ -249,13 +242,16 @@ public:
                 pro.update (pc_count);
         } // parallel for
         pro.done ();
-        if (leap == 0)
-            std::cout << pc_count
-                      << (PolyCube::canonical_only ? " free" : " fixed")
-                      << " cubs found\n";
-        if (n_cubes > 0 && leap == 0 && pc_count != n_cubes)
-            std::cout << "error: expected " << n_cubes << " != "
-                      << pc_count << "\n";
+        if (! filter)
+        {
+            if (leap == 0)
+                std::cout << pc_count
+                          << (PolyCube::canonical_only ? " free" : " fixed")
+                          << " cubs found\n";
+            if (n_cubes > 0 && leap == 0 && pc_count != n_cubes)
+                std::cout << "error: expected " << n_cubes << " != "
+                          << pc_count << "\n";
+        }
         return pc_count;
     }
 

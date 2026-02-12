@@ -162,6 +162,7 @@ struct BorderFinder
     }; // LinePool
 
     const Cubes &cs;
+    Dim lo;
     LinePool pool;
     Polygons polygons;
 
@@ -169,15 +170,16 @@ struct BorderFinder
         : cs(cs)
     {
         assert (DIM == 2);
+        lo = cs.bounding_box ().lo;
         // Collect all border line segments in pool.
         for (Dim p : cs)
             for (Dim d : p)
                 if (! cs.contains (p + d))
                 {
-                    // P+d is in corona.  Determine unoriented line
-                    // segment between P and P+d.
+                    // P+d is in corona.  Determine normalized unoriented
+                    // line segment between P and P+d.
                     Dim off = Dim { d[0] + d[1] > 0, d[1] > d[0] };
-                    pool += Line { p + off, p + off + d.rot(1) };
+                    pool += Line { p + off - lo, p + off + d.rot(1) - lo };
                 }
     }
     enum Orient { Left = 1, Right = -1 };
@@ -186,14 +188,14 @@ struct BorderFinder
         if (outer)
         {
             for (Dim p : cs)
-                if (p[1] == 0)
-                    return { p, p + Dim{1,0} };
+                if (p[1] == lo[1])
+                    return { p - lo, p + Dim{1,0} - lo };
         }
         else
             for (Dim p : cs)
                 for (Dim::value_t dy = 0; dy <= 1; ++dy)
                 {
-                    const Dim a = p + Dim { 0, dy };
+                    const Dim a = p + Dim { 0, dy } - lo;
                     const Dim b = a + Dim { 1, 0 };
                     Line line { dy ? b : a, dy ? a : b };
                     if (pool.contains (line))

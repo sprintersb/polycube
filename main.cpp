@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 // Own
 #include "polycube.h"
 
@@ -91,11 +92,13 @@ int main_polycube (int argc, char *argv[])
                 int max_corona = corona_margin > 0
                     ? corona_margin + smallest_corona[i - 1]
                     : -1;
-                PolyCube::Filter filter = [max_corona](const PolyCube &pc)
-                {
-                    return (max_corona <= 0
-                            || ! pc.has_large_corona (max_corona));
-                };
+                PolyCube::Filter filter =
+                    [max_corona](const PolyCube &pc)
+                    {
+                        return ! pc.has_large_corona (max_corona);
+                    };
+                if (max_corona <= 0)
+                    filter = nullptr;
                 PolyCube::add_sprouts_way4 (i, n_slots, 0, vset[i], vset[i - 1],
                                             200, filter, nullptr);
             }
@@ -134,6 +137,12 @@ int main_polycube (int argc, char *argv[])
         smallest_corona[i] = poly.a_.begin ()->first;
         std::cout << ccount << " polycubes"
                   << "  (coro min: " << smallest_corona[i] << ")\n";
+        if (way == 4 && extra_spice)
+        {
+            const double r = 2 * sqrt (2 * i - 1) + 2;
+            printf ("coro min / calculated = %d / %.2f = %.2f\n",
+                    smallest_corona[i], r, smallest_corona[i] / r);
+        }
 
         poly.print (i, PolyCube::Poly::POLY_TEX);
         std::cout.flush();
