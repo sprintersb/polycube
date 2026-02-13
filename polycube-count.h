@@ -57,7 +57,7 @@ int64_t cube_count_canon (int dim, int n_cells)
               818136047201932, 6383528588447574 },
             // n = 4: https://oeis.org/A068870
             { 1, 1, 1, 2, 7, 26, 147, 1019, 8699, 82535, 846042, 9078720,
-              /* GJL */ 100651853 }
+              /* GJL */ 100651853, 1141767844 }
         }
     };
     return ((size_t) dim < cube_counts.size ()
