@@ -23,6 +23,7 @@
 struct CubesIterator;
 struct CubesMuIterator;
 struct Pad;
+struct Dist;
 using VertexValues = std::array<int, 1 << DIM>;
 
 // Cubes is a vector / array since that is most memory friendly.
@@ -152,6 +153,7 @@ private:
     void flip (int mask, const Box&);
     // Swap the specified dimensions.  !!! This will trash the ordering !!!
     void swap (int, int);
+    bool matches_flipped (int dim, const Box&) const;
 public:
     Pad congruents () const;
     void canonicalize ();
@@ -162,9 +164,10 @@ public:
         c.canonicalize ();
         return c;
     }
-    int maybe_canonical_vertex (VertexValues&, const Box&) const;
-    bool canonicalizable_vertices () const;
+    int maybe_canonical_vertex (VertexValues&, const Box&, int&) const;
+    bool canonicalizable_vertices (int &symmetry) const;
     bool maybe_canonicalize_vertices ();
+    int maybe_symmetry (const std::array<Dist*, 1 << DIM>&, const Box&) const;
     CubesMuIterator begin ();
     CubesMuIterator end ();
     CubesIterator begin () const;
@@ -231,6 +234,17 @@ inline void Cubes::flip (int mask, const Box &bbox)
                 d.set (b, bbox.hi[b] - d[b]);
 }
 
+inline bool Cubes::matches_flipped (int dim, const Box &bbox) const
+{
+    for (Dim d : *this)
+    {
+        d.set (dim, bbox.hi[dim] - d[dim]);
+        if (! contains (d))
+            return false;
+    }
+    return true;
+}
+
 inline void Cubes::swap (int a, int b)
 {
     for (Dim &d : *this)
@@ -242,44 +256,7 @@ inline void Cubes::swap (int a, int b)
     }
 }
 
-#if DIM <= 3
-struct Pad : std::vector<Cubes>
-{
-    bool add (const Cubes &c)
-    {
-        for (auto it = begin (); ; ++it)
-            if (int i; it == end () || (i = c.cmp (*it)) < 0)
-            {
-                std::vector<Cubes>::insert (it, c);
-                return true;
-            }
-            else if (i == 0)
-                break;
-        return false;
-    }
-};
-#else
-struct Pad : std::set<Cubes>
-{
-    bool add (const Cubes &c)
-    {
-        const auto sz = size ();
-        insert (c);
-        return sz != size ();
-    }
-    void reserve (int) const {}
-    void resize (int n, const Cubes &c)
-    {
-        assert (n == 1);
-        clear ();
-        add (c);
-    }
-    const_reference front () const
-    {
-        return * cbegin ();
-    }
-};
-#endif
+struct Pad : std::set<Cubes> {};
 
 Pad Cubes::congruents () const
 {
@@ -299,12 +276,11 @@ Pad Cubes::congruents () const
 #else
     assert (0 && "todo: canonicalize in DIM");
 #endif
-    pad.reserve (hyperoctahedral_order (DIM));
-    pad.resize (1, c);
+    pad.insert (c);
     for (auto s = S; *s; ++s)
         switch (*s - '0')
         {
-#define PADD(FF) pad.add (c = c.FF); break
+#define PADD(FF) pad.insert (c = c.FF); break
             default: continue;
             case 0: PADD (mirrored (0));
             case 1: PADD (rotated (0, 1));
@@ -330,13 +306,14 @@ void Cubes::canonicalize ()
     bool success = maybe_canonicalize_vertices ();
     stat[success] += 1;
     if (! success)
-        cells = std::move (congruents().front().cells);
+        cells = std::move (congruents().begin()->cells);
 }
 
 int Cubes::multiplicity () const
 {
-    return canonicalizable_vertices ()
-        ? hyperoctahedral_order (DIM)
+    int symmetry;
+    return canonicalizable_vertices (symmetry)
+        ? hyperoctahedral_order (DIM) >> (symmetry >= 0)
         : (int) congruents().size ();
 }
 
@@ -414,16 +391,42 @@ std::ostream& operator << (std::ostream &ost, const Dist &c)
     return ost << "\n";
 }
 
-inline bool Cubes::canonicalizable_vertices () const
+inline bool Cubes::canonicalizable_vertices (int &symmetry) const
 {
     VertexValues vvs;
-    return maybe_canonical_vertex (vvs, bounding_box ()) >= 0;
+    return maybe_canonical_vertex (vvs, bounding_box (), symmetry) >= 0;
+}
+
+// Return dim when there is respective simple mirror symmetry,
+// otherwise return -1.
+int Cubes::maybe_symmetry (const std::array<Dist*, 1 << DIM> &pc,
+                           const Box &bbox) const
+{
+    const int max_value = pc[(1 << DIM) - 1]->value;
+    if (max_value != (1 << (DIM - 1)) - 1)
+        return -1;
+    // # valuations are exacly half of HOh's symmetries, which is a
+    // hallmark for mirror symmetry.
+    const int symmetry = pc[0]->id ^ pc[1]->id;
+    // For now, only consider simple reflections, i.e. symmetry has popcount 1.
+    if (symmetry & (symmetry - 1))
+        return -1;
+    for (int i = 2; i < 1 << DIM; i += 2)
+        if ((pc[i]->id ^ pc[i + 1]->id) != symmetry)
+            return -1;
+    // All looks good until now, but we need a final proof.
+    const int dim = count_trailing_zeros (symmetry);
+    if (! matches_flipped (dim, bbox))
+        return -1;
+    return dim;
 }
 
 // Return the id of a canonical vertex in [0, 2^DIM), or -1 if not found.
-// The latter typically occurs when there is some sort of symmetry.
-int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox) const
+// Set symmetry to a dimension of mirror symmetry, or -1 if none such.
+int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox,
+                                   int &symmetry) const
 {
+    symmetry = -1;
     // For each cubli, record its man distances to any of the bounding vertices.
     std::array<Dist, 1 << DIM> vdist;
     for (int id = 0; id < 1 << DIM; ++id)
@@ -465,6 +468,9 @@ int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox) const
         // Canonical: Use the vertex with the smallest valuation.
         return pc[0]->id;
 
+    if ((symmetry = maybe_symmetry (pc, bbox)) >= 0)
+        return pc[0]->id;
+
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
     for (int b = 0; b < 1 << DIM; ++b)
@@ -484,7 +490,8 @@ bool Cubes::maybe_canonicalize_vertices ()
     const Box bbox = bounding_box ();
     assert (bbox.lo == Dim::all0);
     VertexValues vvs;
-    const int id = maybe_canonical_vertex (vvs, bbox);
+    int symmetry;
+    const int id = maybe_canonical_vertex (vvs, bbox, symmetry);
     if (id < 0)
         return false;
 
@@ -507,6 +514,7 @@ bool Cubes::maybe_canonicalize_vertices ()
     // dimension neighbors get higher vertex values.
     for (int dim = 0; dim < DIM - 1; ++dim, todo &= todo - 1)
     {
+        assert (todo);
         const int lsb = count_trailing_zeros (todo);
         // Search the vertex with the value as specified by todo in
         // the vertex -> value list. We only have to look for vertex
