@@ -162,7 +162,7 @@ public:
         c.canonicalize ();
         return c;
     }
-    int canonical_vertex (VertexValues&, const Box&) const;
+    int maybe_canonical_vertex (VertexValues&, const Box&) const;
     bool canonicalizable_vertices () const;
     bool maybe_canonicalize_vertices ();
     CubesMuIterator begin ();
@@ -222,13 +222,13 @@ inline CubesMuIterator Cubes::end ()
     return CubesMuIterator { cells.end () };
 }
 
-inline void Cubes::flip (int mask, const Box &bb)
+inline void Cubes::flip (int mask, const Box &bbox)
 {
-    assert (bb.lo == Dim::all0);
+    assert (bbox.lo == Dim::all0);
     for (Dim &d : *this)
         for (int b = 0; b < DIM; ++b)
             if (mask & (1 << b))
-                d.set (b, bb.hi[b] - d[b]);
+                d.set (b, bbox.hi[b] - d[b]);
 }
 
 inline void Cubes::swap (int a, int b)
@@ -417,12 +417,12 @@ std::ostream& operator << (std::ostream &ost, const Dist &c)
 inline bool Cubes::canonicalizable_vertices () const
 {
     VertexValues vvs;
-    return canonical_vertex (vvs, bounding_box ()) >= 0;
+    return maybe_canonical_vertex (vvs, bounding_box ()) >= 0;
 }
 
-// Return the id of a canonica vertex in [0, 2^DIM), or -1 if not found.
+// Return the id of a canonical vertex in [0, 2^DIM), or -1 if not found.
 // The latter typically occurs when there is some sort of symmetry.
-int Cubes::canonical_vertex (VertexValues &vvs, const Box &bb) const
+int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox) const
 {
     // For each cubli, record its man distances to any of the bounding vertices.
     std::array<Dist, 1 << DIM> vdist;
@@ -432,17 +432,14 @@ int Cubes::canonical_vertex (VertexValues &vvs, const Box &bb) const
         Dist &vd = vdist[id];
         vd.id = id;
         const Dim diag = Dim::diag (id);
-        const Dim ecke = bb.vertex (id);
+        const Dim ecke = bbox.vertex (id);
         for (Dim d : *this)
-        {
             // Get the distance to bounding vertex id's cube diagonal.
             // This is better than just adding 1 for a cubli of its distance.
-            int dist = 10 + 10 * d.dist (ecke, diag);
-            vd[d.dist (ecke)] += 1 + dist * dist;
-        }
+            vd[d.dist (ecke)] += 1 + 13 * d.dist (ecke, diag);
     }
 
-    // Sorting the VertexDist.
+    // Sort vdist[].
     std::array<Dist*, 1 << DIM> pc;
     for (int id = 0; id < 1 << DIM; ++id)
         pc[id] = & vdist[id];
@@ -464,7 +461,7 @@ int Cubes::canonical_vertex (VertexValues &vvs, const Box &bb) const
     for (size_t id = 0; id < 1 << DIM; ++id)
         vvs[id] = vdist[id].value;
     // Shortcut: When all vertex dists are different, we always succeed.
-    if (1 + max_value == 1 << DIM)
+    if (max_value == (1 << DIM) - 1)
         // Canonical: Use the vertex with the smallest valuation.
         return pc[0]->id;
 
@@ -484,21 +481,24 @@ int Cubes::canonical_vertex (VertexValues &vvs, const Box &bb) const
 
 bool Cubes::maybe_canonicalize_vertices ()
 {
-    const Box bb = bounding_box ();
+    const Box bbox = bounding_box ();
+    assert (bbox.lo == Dim::all0);
     VertexValues vvs;
-    const int id = canonical_vertex (vvs, bb);
+    const int id = maybe_canonical_vertex (vvs, bbox);
     if (id < 0)
         return false;
 
     assert (vvs.size () == 1 << DIM);
     Cubes p2 (*this);
-    assert (bb.lo == Dim::all0);
     // Reflect such that vertex id becomes vertex 0.
-    p2.flip (id, bb);
-    // Adjust vvs accordingly.
-    for (int b = 0; b < 1 << DIM; ++b)
-        if (b > (b ^ id))
-            std::swap (vvs[b], vvs[b ^ id]);
+    if (id != 0)
+    {
+        p2.flip (id, bbox);
+        // Adjust vvs accordingly.
+        for (int b = 0; b < 1 << DIM; ++b)
+            if (b > (b ^ id))
+                std::swap (vvs[b], vvs[b ^ id]);
+    }
     // Now sort the DIM vertices adjacent to id.
     uint64_t todo = 0;
     for (int b = 0; b < DIM; ++b)
@@ -507,7 +507,6 @@ bool Cubes::maybe_canonicalize_vertices ()
     // dimension neighbors get higher vertex values.
     for (int dim = 0; dim < DIM - 1; ++dim, todo &= todo - 1)
     {
-        assert (todo);
         const int lsb = count_trailing_zeros (todo);
         // Search the vertex with the value as specified by todo in
         // the vertex -> value list. We only have to look for vertex
@@ -528,8 +527,8 @@ bool Cubes::maybe_canonicalize_vertices ()
                 }
             }
     }
-    // Now p2 is canonical, but swapping and flipping clobbered
-    // cells' order.  Re-construct a proper one.
+    // Now p2 has canonical cublis, but swapping and flipping
+    // clobbered cells' order.  Re-construct a proper one.
     cells.clear ();
     for (Dim d : p2)
         add (d);

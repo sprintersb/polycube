@@ -121,6 +121,7 @@ int main_polycube (int argc, char *argv[])
             }
         }
 
+        // Stat about fraction of fast canonicalization.
         auto tot = stat[0] + stat[1];
         double f0 = (double) +stat[0] / tot;
         double f1 = (double) +stat[1] / tot;

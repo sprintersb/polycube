@@ -34,7 +34,7 @@ struct Dim
 
     vector_t v = (vector_t) (int_t) 0;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
-    Dim () : v(Dim::all0) {}
+    Dim () {}
     Dim (std::initializer_list<value_t> &&il)
     {
         assert (il.size () == 0 || il.size () == DIM);
@@ -136,8 +136,8 @@ struct Dim
     // Manhattan
     int abs () const
     {
-        int man = 0;
-        for (int i = 0; i < size (); ++i)
+        int man = std::abs (v[0]);
+        for (int i = 1; i < size (); ++i)
             man += std::abs (v[i]);
         return man;
     }
@@ -154,7 +154,7 @@ struct Dim
             d.set (i, lo + std::rand () % mod);
         return d;
     }
-    // Cube diagonal starting at vertex id, pointing to the opposite id.
+    // Cube diagonal starting at vertex id, pointing to the opposite vertex.
     static Dim diag (int id)
     {
         Dim d;
@@ -162,14 +162,11 @@ struct Dim
             d.set (i, (id & (1 << i)) ? -1 : 1);
         return d;
     }
-    // The distance to the line p0 + a * v, multiplied by DIM.
+    // The distance to the line p0 + <v>, multiplied by DIM.
     int dist (Dim p0, Dim v) const
     {
-        //std::cout << (*this) << ".dist(" << p0 << ", " << v;
         const Dim d = *this - p0;
         const Dim r = d * size() - v * (d * v);
-        //std::cout << " (a=" << ((d * v) / (double) (v*v)) << ") ";
-        //std::cout << " = " << r << " = " << r.abs () << "\n";
         return r.abs ();
     }
     static Dim rand (Dim range)
@@ -199,10 +196,6 @@ struct Box
             if (d.v[i] < lo.v[i] || d.v[i] > hi.v[i])
                 return false;
         return true;
-    }
-    Box grow (int g) const
-    {
-        return Box { lo - Dim::all (g),  hi + Dim::all (g) };
     }
     Dim vertex (int id) const
     {
@@ -307,7 +300,7 @@ public:
     CIterator end ()   const { return CIterator (&a_[size ()]); }
     CIterator cbegin () const { return CIterator (&a_[0]); }
     CIterator cend ()   const { return CIterator (&a_[size ()]); }
-    void insert (Iterator &it, Dim d)
+    void insert (const Iterator &it, Dim d)
     {
         const int pos = (int) (& (*it) - & a_[0]);
         assert (pos >= 0 && pos <= size ());

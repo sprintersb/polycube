@@ -139,9 +139,6 @@ public:
     int add_sprouts_leap_way5 (Vector &vms, int leap, Filter filter) const
     {
         assert (leap >= 2);
-#ifdef CUBES_REL
-        assert (0 && "todo: leaping for CUBES_REL");
-#endif
         int new_count = 0;
         std::vector<Set> pcs (leap);
         pcs[0].insert (*this);
@@ -277,7 +274,7 @@ public:
         assert (leap >= 1);
         assert (n_slots >= 1);
         assert (n_parts >= 1);
-        // leap = 1 isn't real leap-frogging and works with CUBES_REL, too.
+        // leap = 1 isn't real leap-frogging.
         leap = leap == 1 ? 0 : leap;
 
         // Piecing together the poly by doing one slot at a time.
