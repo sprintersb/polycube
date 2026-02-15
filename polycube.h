@@ -316,11 +316,19 @@ public:
     struct Poly
     {
         using T = int64_t;
+        using value_type = T;
+        using coefficient_type = T;
+        using exponent_type = int;
+        using monomial_type = std::map<int,T>::value_type;
         enum { POLY_TEX, POLY_LIST };
         std::map<int,T> a_;
 
         Poly () {}
 
+        Poly (const monomial_type &mono)
+        {
+            a_[mono.first] = mono.second;
+        }
         // Way 0: 100% sequential.
         Poly (const Set &set)
         {

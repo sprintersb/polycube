@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <cinttypes>
 #include <cmath>
 // Own
 #include "polycube.h"
@@ -43,7 +44,7 @@ int main_polycube (int argc, char *argv[])
     assert (way == 0 || way == 4 || way == 5);
     assert (dim == DIM);
 #ifdef CUBES_ARRAY
-    assert (level == CELLS);
+    assert (level <= CELLS);
 #endif
     if (way == 5)
         assert (level - leap >= 1);
@@ -86,6 +87,9 @@ int main_polycube (int argc, char *argv[])
         }
         else
         {
+            stat[0] = 0;
+            stat[1] = 0;
+            stat[2] = 0;
             if (way == 4)
             {
                 int corona_margin = extra_spice;
@@ -126,6 +130,12 @@ int main_polycube (int argc, char *argv[])
                     if (way == 0) pc.add_sprouts (set[i]);
             }
         }
+
+        auto tot = stat[0] + stat[1];
+        double f0 = (double) +stat[0] / tot;
+        double f1 = (double) +stat[1] / tot;
+        printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)\n",
+                +stat[0], 100 * f0, +stat[1], 100 * f1);
 
         if (way == 4)
             poly = PolyCube::Poly (vset[i]);

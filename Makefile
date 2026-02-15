@@ -47,12 +47,16 @@ run: dorun
 .PHONY: progress rotor
 
 progress:
-	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp
+	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp $(FLAGS)
 	./prog.x
 
 rotor:
-	g++ test-rotation.cpp -o rotor.x -Wall -O3 -fopenmp $(ARGS)
+	g++ test-rotation.cpp -o rotor.x -Wall -O3 -fopenmp $(FLAGS)
 	./rotor.x
+
+canon:
+	g++ test-canonical.cpp -o canon.x -Wall -O3 -fopenmp $(FLAGS)
+	./canon.x
 
 clean:
 	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)

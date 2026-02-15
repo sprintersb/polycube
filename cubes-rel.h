@@ -54,10 +54,6 @@ struct CubesRel
     {
         return sorted () == c.sorted ();
     }
-    bool is_canonical () const
-    {
-        return sorted().is_canonical ();
-    }
     int multiplicity () const
     {
         return sorted().multiplicity ();

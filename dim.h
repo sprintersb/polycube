@@ -56,7 +56,7 @@ struct Dim
     {
         return (int_t) v;
     }
-    int size () const
+    static inline int size ()
     {
         return DIM;
     }
@@ -97,6 +97,13 @@ struct Dim
     Dim operator - (Dim d) const { return Dim (v - d.v); }
     Dim operator * (int i) const { return Dim (v * (value_t) i); }
     int operator % (Dim d) const { return v[0] * d[1] - v[1] * d[0]; }
+    int operator * (Dim d) const
+    {
+        int s = 0;
+        for (int i = 0; i < size (); ++i)
+            s += v[i] * d[i];
+        return s;
+    }
     Dim rot (int i /* Left in units of 90 deg */) const
     {
         Dim d (*this);
@@ -126,11 +133,58 @@ struct Dim
             return d.hash ();
         }
     };
+    // Manhattan
+    int abs () const
+    {
+        int man = 0;
+        for (int i = 0; i < size (); ++i)
+            man += std::abs (v[i]);
+        return man;
+    }
+    // Manhattan distance
+    int dist (Dim r) const
+    {
+        return (*this - r).abs ();
+    }
+    static Dim rand (int lo, int hi)
+    {
+        const int mod = hi - lo + 1;
+        Dim d;
+        for (int i = 0; i < size (); ++i)
+            d.set (i, lo + std::rand () % mod);
+        return d;
+    }
+    // Cube diagonal starting at vertex id, pointing to the opposite id.
+    static Dim diag (int id)
+    {
+        Dim d;
+        for (int i = 0; i < size (); ++i)
+            d.set (i, (id & (1 << i)) ? -1 : 1);
+        return d;
+    }
+    // The distance to the line p0 + a * v, multiplied by DIM.
+    int dist (Dim p0, Dim v) const
+    {
+        //std::cout << (*this) << ".dist(" << p0 << ", " << v;
+        const Dim d = *this - p0;
+        const Dim r = d * size() - v * (d * v);
+        //std::cout << " (a=" << ((d * v) / (double) (v*v)) << ") ";
+        //std::cout << " = " << r << " = " << r.abs () << "\n";
+        return r.abs ();
+    }
+    static Dim rand (Dim range)
+    {
+        Dim d;
+        for (int i = 0; i < size (); ++i)
+            d.set (i, std::rand () % range[i]);
+        return d;
+    }
 
     DimIterator begin () const;
     DimIterator end () const;
     static const Dim Min;
     static const Dim Max;
+    friend std::ostream& operator << (std::ostream&, Dim);
 };
 
 inline const Dim Dim::Min = Dim::all (INT8_MIN);
@@ -149,6 +203,13 @@ struct Box
     Box grow (int g) const
     {
         return Box { lo - Dim::all (g),  hi + Dim::all (g) };
+    }
+    Dim vertex (int id) const
+    {
+        Dim d;
+        for (int i = 0; i < lo.size (); ++i)
+            d.set (i, (id & (1 << i)) ? hi[i] : lo[i]);
+        return d;
     }
 };
 
@@ -212,13 +273,17 @@ public:
         assert (sz >= 0 && sz <= CELLS);
         return sz;
     }
+    void clear ()
+    {
+        set_size (0);
+    }
     struct Iterator
     {
         friend DimArray;
         void operator ++ () { ++ptr; };
         bool operator == (const Iterator &i) const { return ptr == i.ptr; }
         bool operator != (const Iterator &i) const { return ptr != i.ptr; }
-        Dim& operator * () { return *ptr; }
+        Dim& operator * () const { return *ptr; }
     private:
         Dim *ptr;
         Iterator () = delete;
