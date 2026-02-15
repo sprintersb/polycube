@@ -23,22 +23,12 @@ int main_polycube (int argc, char *argv[])
     if (argc > 4)   sscanf (argv[4], "%i", &extra_spice);
     if (argc > 5)   sscanf (argv[5], "%i", &leap);
 
-#ifdef CUBES_REL
-    // There is no way we can possibly canonicalize these,
-    PolyCube::canonical_only = 0;
-#else
     PolyCube::canonical_only = way > 0 && (2 <= dim && dim <= 4);
-#endif
 
 #if defined CUBES_ARRAY
     std::cout << "CUBES_ARRAY  DIM=" << DIM << "  CELLS=" << CELLS << "\n";
 #else
     std::cout << "CUBES_VECT DIM=" << DIM << "\n";
-#endif
-#if defined CUBES_REL
-    std::cout << "Cubes = CubesRel\n";
-#else
-    std::cout << "Cubes = CubesVect\n";
 #endif
 
     assert (way == 0 || way == 4 || way == 5);
