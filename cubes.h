@@ -492,7 +492,9 @@ int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox,
 bool Cubes::maybe_canonicalize_vertices ()
 {
     const Box bbox = bounding_box ();
-    assert (bbox.lo == Dim::all0);
+    assert (bbox.lo == Dim::all0 && "expecting aligned cubes");
+    assert (bbox.hi.dist (bbox.lo) < (int) std::tuple_size<DistBase>::value
+            && "Cubes diameter exceeds DistBase capacity");
     VertexValues vvs;
     int symmetry;
     const int id = maybe_canonical_vertex (vvs, bbox, symmetry);
