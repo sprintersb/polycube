@@ -2,10 +2,6 @@
 #ifndef CUBES_H
 #define CUBES_H
 
-#if defined CUBES_ARRAY && !defined CELLS
-#error CUBES_ARRAY CELLS=?
-#endif
-
 #include <string>
 #include <iostream>
 #include <vector>

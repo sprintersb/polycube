@@ -11,6 +11,19 @@
 // Own
 #include "hash.h"
 
+// Make CUBES_ARRAY / DimArray the default for performance.
+#if defined CUBES_ARRAY && defined CUBES_VECT
+#error pick one of -DCUBES_ARRAY or -DCUBES_VECT
+#elif !defined CUBES_ARRAY && !defined CUBES_VECT
+#define CUBES_ARRAY
+#elif defined CUBES_VECT
+#undef CELLS
+#endif
+
+#if defined CUBES_ARRAY && !defined CELLS
+#error CUBES_ARRAY requires to define -DCELLS=<value>
+#endif
+
 struct DimIterator;
 
 struct Dim
