@@ -21,14 +21,11 @@
 // Own
 #include "polycube-count.h"
 #include "progress.h"
-#include "bool-counter.h"
 
 #include "hash.h"
 #include "dim.h"
 #include "cubes.h"
 #include "corona.h"
-
-BoolCounter eqne;
 
 inline int max_possible_corona;
 
