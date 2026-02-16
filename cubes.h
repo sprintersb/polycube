@@ -258,7 +258,8 @@ inline void Cubes::swap (int a, int b)
 
 struct Pad : std::set<Cubes> {};
 
-#define M3  "11121113111311141112111"
+#define M2  "111"
+#define M3  M2 "2" M2 "3" M2 "3" M2 "4" M2 "2" M2
 #define M4  M3 "5" M3 "5" M3 "6" M3 "5" M3 "6" M3 "5" M3 "5" M3
 #define M5  M4 "8" M4 "9" M4 "8" M4 "9" M4 "8" M4 "8" M4 "7" M4 "7" M4 "7" M4
 
@@ -270,7 +271,7 @@ Pad Cubes::congruents () const
     const char *S = "?";
     switch (DIM)
     {
-        case 2: S = "111" "0" "111"; break;
+        case 2: S = M2 "0" M2; break;
         case 3: S = M3 "0" M3; break;
         case 4: S = M4 "0" M4; break;
         case 5: S = M5 "0" M5; break;
