@@ -4,9 +4,11 @@
 
 #include <string>
 #include <iostream>
+#include <array>
 #include <vector>
 #include <set>
 #include <utility> // std::swap
+#include <algorithm> // std::sort
 // C
 #include <cstring>
 #include <cstdlib>
@@ -166,6 +168,9 @@ public:
     // For now, this is only used after bulk changes like in rotated().
     void sort ()
     {
+        // For now we prefer qsort over std::sort since the former
+        // doesn't require all that iterator gaga.  And std::sort
+        // doesn't have an edge over qsort.
         std::qsort (& cells, size (), sizeof (Dim),
                     [](const void *va, const void *vb) -> int
                     {
@@ -478,14 +483,11 @@ int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox,
     std::array<Dist*, 1 << DIM> pc;
     for (int id = 0; id < 1 << DIM; ++id)
         pc[id] = & vdist[id];
-    // Prefer qsort over std::sort since qsort can use spaceship (cmp).
-    std::qsort (&pc, pc.size (), sizeof (Dist*),
-                [](const void *va, const void *vb) -> int
-                {
-                    const Dist *pa = *(const Dist *const *) va;
-                    const Dist *pb = *(const Dist *const *) vb;
-                    return pa->cmp (*pb);
-                });
+    std::sort (pc.begin (), pc.end (),
+               [] (const Dist *pa, const Dist *pb) -> bool
+               {
+                   return pa->cmp (*pb) < 0;
+               });
     // Add valuations in increasing order, assigning same valuation
     // if it matches the predecessor's.
     pc[0]->value = 0;
