@@ -121,16 +121,35 @@ public:
 public:
     Cubes rotated (int i, int j) const
     {
+        Cubes c (*this);
+        return c.rotate (i, j);
+    }
+    Cubes& rotate (int i, int j)
+    {
         const int xm = max_coord (i);
-        Cubes c;
-        for (Dim d : cells)
+        if (size () <= 14)
         {
-            int y = xm - d[i];
-            d.set (i, d[j]);
-            d.set (j, y);
-            c.add (d);
+            Cubes c;
+            for (Dim d : cells)
+            {
+                int y = xm - d[i];
+                d.set (i, d[j]);
+                d.set (j, y);
+                c.add (d);
+            }
+            cells = std::move (c.cells);
         }
-        return c;
+        else
+        {
+            for (Dim &d : cells)
+            {
+                int y = xm - d[i];
+                d.set (i, d[j]);
+                d.set (j, y);
+            }
+            sort ();
+        }
+        return *this;
     }
     Cubes mirrored (int i) const
     {
@@ -142,6 +161,18 @@ public:
             c.add (d);
         }
         return c;
+    }
+    // This is usually not needed since add() adds Dim's in order.
+    // For now, this is only used after bulk changes like in rotated().
+    void sort ()
+    {
+        std::qsort (& cells, size (), sizeof (Dim),
+                    [](const void *va, const void *vb) -> int
+                    {
+                        Dim a = *(const Dim*) va;
+                        Dim b = *(const Dim*) vb;
+                        return a.cmp (b);
+                    });
     }
 private:
     // Flip all the dimensions as specified in mask.
@@ -278,22 +309,22 @@ Pad Cubes::congruents () const
         switch (*s - '0')
         {
             default: assert (0 && "bad char");
-#define PADD(FF) pad.insert (c = c.FF); break
-            case 0: PADD (mirrored (0));
-            case 1: PADD (rotated (0, 1));
+            case 0: pad.insert (c = c.mirrored (0)); break;
+#define PADD(FF) pad.insert (c.FF); break
+            case 1: PADD (rotate (0, 1));
 #if DIM >= 3
-            case 2: PADD (rotated (0, 2));
-            case 3: PADD (rotated (1, 2));
-            case 4: PADD (rotated (2, 1));
+            case 2: PADD (rotate (0, 2));
+            case 3: PADD (rotate (1, 2));
+            case 4: PADD (rotate (2, 1));
 #endif
 #if DIM >= 4
-            case 5: PADD (rotated (3, 0));
-            case 6: PADD (rotated (3, 1));
+            case 5: PADD (rotate (3, 0));
+            case 6: PADD (rotate (3, 1));
 #endif
 #if DIM >= 5
-            case 7: PADD (rotated (4, 0));
-            case 8: PADD (rotated (4, 1));
-            case 9: PADD (rotated (3, 4));
+            case 7: PADD (rotate (4, 0));
+            case 8: PADD (rotate (4, 1));
+            case 9: PADD (rotate (3, 4));
 #endif
 #undef PADD
         } // switch
