@@ -123,10 +123,19 @@ int main_polycube (int argc, char *argv[])
 
         // Stat about fraction of fast canonicalization.
         auto tot = stat[0] + stat[1];
-        double f0 = tot ? (double) +stat[0] / tot : 0.0;
-        double f1 = tot ? (double) +stat[1] / tot : 0.0;
-        printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)\n",
-                +stat[0], 100 * f0, +stat[1], 100 * f1);
+        if (tot)
+        {
+            const double canon_cost = 4;
+            double f0 = tot ? (double) +stat[0] / tot : 0.0;
+            double f1 = tot ? (double) +stat[1] / tot : 0.0;
+            printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)",
+                    +stat[0], 100 * f0, +stat[1], 100 * f1);
+            printf ("\t Cost factor: %.1f + %.1f = %.1f\n",
+                    f0 * hyperoctahedral_order (DIM), f1 * canon_cost,
+                    f0 * hyperoctahedral_order (DIM) + f1 * canon_cost);
+        }
+        else
+            printf ("Cost factor: %.1f\n", 0.0 + hyperoctahedral_order (DIM));
 
         if (way == 4)
             poly = PolyCube::Poly (vset[i]);
