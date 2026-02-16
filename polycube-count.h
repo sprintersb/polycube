@@ -8,9 +8,10 @@
 
 namespace
 {
+// Number of fixed polycubes.
 int64_t cube_count (int dim, int n_cells)
 {
-    static const std::array<std::vector<int64_t>, 4 + 1> cube_counts =
+    static const std::array<std::vector<int64_t>, 5 + 1> cube_counts =
     {
         {
             {},
@@ -28,7 +29,11 @@ int64_t cube_count (int dim, int n_cells)
             // n = 4: https://oeis.org/A151830
             { 1, 1, 4, 28, 234, 2162, 21272, 218740, 2323730, 25314097,
               281345096, 3178474308, 36400646766, 421693622520, 4933625049464,
-              58216226287844, 692095652493483 }
+              58216226287844, 692095652493483 },
+            // n = 5: https://oeis.org/A151831
+            { 1, 1, 5, 45, 495, 6095, 80617, 1121075, 16177405, 240196280,
+              3648115531, 56440473990, 886696345225, 14111836458890,
+              227093585071305, 3689707621144614 },
         }
     };
     return ((size_t) dim < cube_counts.size ()
@@ -37,9 +42,10 @@ int64_t cube_count (int dim, int n_cells)
         : -1;
 }
 
+// Number of free polycubes, mirrors are the same.
 int64_t cube_count_canon (int dim, int n_cells)
 {
-    static const std::array<std::vector<int64_t>, 4 + 1> cube_counts =
+    static const std::array<std::vector<int64_t>, 5 + 1> cube_counts =
     {
         {
             {},
@@ -57,7 +63,10 @@ int64_t cube_count_canon (int dim, int n_cells)
               818136047201932, 6383528588447574 },
             // n = 4: https://oeis.org/A068870
             { 1, 1, 1, 2, 7, 26, 147, 1019, 8699, 82535, 846042, 9078720,
-              /* GJL */ 100651853, 1141767844 }
+              /* GJL */ 100651853, 1141767844 },
+            // n = 5: ???
+            { /* GJL */ 1, 1, 1, 2, 7, 26, 153, 1123, 10708, 119120,
+              1493722, 20252600 },
         }
     };
     return ((size_t) dim < cube_counts.size ()

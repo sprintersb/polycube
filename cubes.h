@@ -258,41 +258,45 @@ inline void Cubes::swap (int a, int b)
 
 struct Pad : std::set<Cubes> {};
 
+#define M3  "11121113111311141112111"
+#define M4  M3 "5" M3 "5" M3 "6" M3 "5" M3 "6" M3 "5" M3 "5" M3
+#define M5  M4 "8" M4 "9" M4 "8" M4 "9" M4 "8" M4 "8" M4 "7" M4 "7" M4 "7" M4
+
 Pad Cubes::congruents () const
 {
     Cubes c (*this);
     Pad pad;
-    const char *S = "";
-#if DIM == 2
-    S = "111" "0" "111";
-#elif DIM == 3
-    S = ("12121 3 12121 3 12121 1 12121 0"
-         "12121 3 12121 3 12121 1 12121");
-#elif DIM == 4
-#define M "11121113111311141112111"
-    S = (M "5" M "5" M "6" M "5" M "6" M "5" M "5" M "0"
-         M "5" M "5" M "6" M "5" M "6" M "5" M "5" M);
-#undef M
-#else
-    assert (0 && "todo: canonicalize in DIM");
-#endif
     pad.insert (c);
+    const char *S = "?";
+    switch (DIM)
+    {
+        case 2: S = "111" "0" "111"; break;
+        case 3: S = M3 "0" M3; break;
+        case 4: S = M4 "0" M4; break;
+        case 5: S = M5 "0" M5; break;
+        default:
+            assert (0 && "todo: canonicalize in DIM");
+    }
     for (auto s = S; *s; ++s)
         switch (*s - '0')
         {
+            default: assert (0 && "bad char");
 #define PADD(FF) pad.insert (c = c.FF); break
-            default: continue;
             case 0: PADD (mirrored (0));
             case 1: PADD (rotated (0, 1));
-#if DIM == 3
-            case 2: PADD (rotated (1, 2));
-            case 3: PADD (rotated (2, 0));
-#elif DIM == 4
+#if DIM >= 3
             case 2: PADD (rotated (0, 2));
             case 3: PADD (rotated (1, 2));
             case 4: PADD (rotated (2, 1));
+#endif
+#if DIM >= 4
             case 5: PADD (rotated (3, 0));
             case 6: PADD (rotated (3, 1));
+#endif
+#if DIM >= 5
+            case 7: PADD (rotated (4, 0));
+            case 8: PADD (rotated (4, 1));
+            case 9: PADD (rotated (3, 4));
 #endif
 #undef PADD
         } // switch
