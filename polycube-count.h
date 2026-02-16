@@ -66,7 +66,7 @@ int64_t cube_count_canon (int dim, int n_cells)
               /* GJL */ 100651853, 1141767844 },
             // n = 5: ???
             { /* GJL */ 1, 1, 1, 2, 7, 26, 153, 1123, 10708, 119120,
-              1493722, 20252600 },
+              /*`GJL */ 1493722, 20252600, 290460057 },
         }
     };
     return ((size_t) dim < cube_counts.size ()
