@@ -203,16 +203,7 @@ public:
     // It must be run after bulk changes like in rotate() or squeeze().
     void sort ()
     {
-        // For now we prefer qsort over std::sort since the former
-        // doesn't require all that iterator gaga.  And std::sort
-        // doesn't have an edge over qsort.
-        std::qsort (cells.data (), size (), sizeof (Dim),
-                    [](const void *va, const void *vb) -> int
-                    {
-                        Dim a = *(const Dim*) va;
-                        Dim b = *(const Dim*) vb;
-                        return a.cmp (b);
-                    });
+        std::sort (cells.begin (), cells.end ());
     }
 private:
     // Flip all the dimensions as specified in mask.

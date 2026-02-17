@@ -5,6 +5,7 @@
 #include <algorithm> // std::min
 #include <iostream>
 #include <array>
+#include <iterator>
 // C
 #include <cstdint>
 #include <cassert>
@@ -325,6 +326,15 @@ private:
         a_[CELLS].v = (Dim::vector_t) (Dim::int_t) sz;
     }
 };
-#endif // CELLS
+
+template<>
+struct std::iterator_traits<DimArray::iterator>
+{
+    using iterator_category = forward_iterator_tag;
+    using value_type = Dim; // DimArray::iterator::value_type;
+    using difference_type = ptrdiff_t;
+};
+
+#endif // CUBES_ARRAY
 
 #endif // DIM_H
