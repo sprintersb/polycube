@@ -200,7 +200,7 @@ public:
         // For now we prefer qsort over std::sort since the former
         // doesn't require all that iterator gaga.  And std::sort
         // doesn't have an edge over qsort.
-        std::qsort (& cells, size (), sizeof (Dim),
+        std::qsort (cells.data (), size (), sizeof (Dim),
                     [](const void *va, const void *vb) -> int
                     {
                         Dim a = *(const Dim*) va;

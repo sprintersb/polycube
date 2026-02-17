@@ -269,6 +269,14 @@ class DimArray
 {
     std::array<Dim, 1 + CELLS> a_;
 public:
+    Dim* data ()
+    {
+        return &a_[0];
+    }
+    const Dim* data () const
+    {
+        return &a_[0];
+    }
     Dim operator [] (int i) const
     {
         return a_[i];
