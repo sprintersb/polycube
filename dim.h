@@ -18,8 +18,6 @@
 #error pick one of -DCUBES_ARRAY or -DCUBES_VECT
 #elif !defined CUBES_ARRAY && !defined CUBES_VECT
 #define CUBES_ARRAY
-#elif defined CUBES_VECT
-#undef CELLS
 #endif
 
 #if defined CUBES_ARRAY && !defined CELLS
@@ -77,14 +75,7 @@ struct Dim
     }
     void set (int i, int val)
     {
-#if defined CUBES_ARRAY
-        // v[i] = Gives warning with CUBES_ARRAY.
-        vector_t w(v);
-        w[i] = (Dim::value_t) val;
-        v = w;
-#else
         v[i] = (Dim::value_t) val;
-#endif
     }
     int operator [] (int i) const
     {

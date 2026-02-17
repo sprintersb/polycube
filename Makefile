@@ -24,7 +24,7 @@ GXX = g++-14
 
 EXTRA_DEP = Makefile
 
-HOST_FLAGS += -W -Wall -Wno-frame-address -save-temps -fverbose-asm -ffunction-sections -O3 -g0 -fopenmp $(FLAGS)
+HOST_FLAGS += -W -Wall -Wno-stringop-overflow -fno-exceptions -save-temps -fverbose-asm -ffunction-sections -O3 -g0 -fopenmp $(FLAGS)
 
 HOST_CXXFLAGS = -std=c++17 -fno-exceptions $(HOST_FLAGS) $(CXXFLAGS)
 

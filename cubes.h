@@ -22,12 +22,18 @@
 // The maximal possible length (in Manhattan metric) of the diagonal
 // of a Cubes' bounding box.  This is used during canonicalization.
 #if !defined MAX_DIAGONAL_LENGTH
-#ifdef CUBES_ARRAY
+#ifdef CELLS
 #define MAX_DIAGONAL_LENGTH CELLS
 #else
 #define MAX_DIAGONAL_LENGTH 80
 #endif
 #endif // MAX_DIAGONAL_LENGTH
+
+// For sizes up to SORT_THRESHOLD we sort by re-building he cells.
+// For values above we use std::sort on garbled cells.
+#ifndef SORT_THRESHOLD
+#define SORT_THRESHOLD 14
+#endif
 
 // The relative cost of a vertex canonicalization compared to one
 // step of traversing the hyperoctahedral group.  For stats only.
@@ -71,8 +77,8 @@ public:
     }
     int cmp (const Cubes &c) const
     {
-        auto &&p2 = c.cells.begin ();
-        auto &&e2 = c.cells.end ();
+        auto p2 = c.cells.begin ();
+        auto e2 = c.cells.end ();
         for (Dim d : cells)
         {
             if (p2 == e2)
@@ -147,7 +153,7 @@ public:
     Cubes& rotate (int i, int j)
     {
         const int xm = max_coord (i);
-        if (size () <= 14)
+        if (size () <= SORT_THRESHOLD)
         {
             Cubes c;
             for (Dim d : cells)
@@ -573,9 +579,17 @@ bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
     }
     // Now p2 has canonical cublis, but swapping and flipping
     // clobbered cells' order.  Re-construct a proper one.
-    cells.clear ();
-    for (Dim d : p2)
-        add (d);
+    if (size () <= SORT_THRESHOLD)
+    {
+        cells.clear ();
+        for (Dim d : p2)
+            add (d);
+    }
+    else
+    {
+        cells = std::move (p2.cells);
+        sort ();
+    }
 
     return true;
 }
