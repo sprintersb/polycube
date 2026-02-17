@@ -10,6 +10,7 @@
 #include <cassert>
 // Own
 #include "hash.h"
+#include "iterator-wrap.h"
 
 // Make CUBES_ARRAY / DimArray the default for performance.
 #if defined CUBES_ARRAY && defined CUBES_VECT
@@ -220,6 +221,8 @@ struct Box
 };
 
 
+// Iterate over the neighbors of 0.  This means that iteration only depends
+// in DIM and not on the actual location of the producer.
 class DimIterator
 {
     using Corona0 = std::array<Dim, 2 * DIM>;
@@ -264,11 +267,16 @@ inline std::ostream& operator << (std::ostream &ost, Dim d)
     return ost << '>';
 }
 
-#ifdef CELLS
+#ifdef CUBES_ARRAY
+// We will be at the brink of memory exhaustion, so we need to  save
+// each possible byte on storage and therefore use a managed std::array.
+// When space and time don't matter, you can still use a std::vector by
+// re-compiling with -DCUBES_VECT.
 class DimArray
 {
     std::array<Dim, 1 + CELLS> a_;
 public:
+    using value_type = Dim;
     Dim* data ()
     {
         return &a_[0];
@@ -291,37 +299,17 @@ public:
     {
         set_size (0);
     }
-    struct Iterator
-    {
-        friend DimArray;
-        void operator ++ () { ++ptr; };
-        bool operator == (const Iterator &i) const { return ptr == i.ptr; }
-        bool operator != (const Iterator &i) const { return ptr != i.ptr; }
-        Dim& operator * () const { return *ptr; }
-    private:
-        Dim *ptr;
-        Iterator () = delete;
-        Iterator (Dim *ptr) : ptr(ptr) {}
-    };
-    struct CIterator
-    {
-        friend DimArray;
-        void operator ++ () { ++ptr; };
-        bool operator == (const CIterator &i) const { return ptr == i.ptr; }
-        bool operator != (const CIterator &i) const { return ptr != i.ptr; }
-        Dim operator * () const { return *ptr; }
-    private:
-        const Dim *ptr;
-        CIterator () = delete;
-        CIterator (const Dim *ptr) : ptr(ptr) {}
-    };
-    Iterator begin () { return Iterator (&a_[0]); }
-    Iterator end ()   { return Iterator (&a_[size ()]); }
-    CIterator begin () const { return CIterator (&a_[0]); }
-    CIterator end ()   const { return CIterator (&a_[size ()]); }
-    CIterator cbegin () const { return CIterator (&a_[0]); }
-    CIterator cend ()   const { return CIterator (&a_[size ()]); }
-    void insert (const Iterator &it, Dim d)
+
+    using iterator       = IteratorWrap<DimArray, Dim*, Dim&>;
+    using const_iterator = IteratorWrap<DimArray, const Dim*, Dim>;
+
+    iterator begin () { return iterator (&a_[0]); }
+    iterator end ()   { return iterator (&a_[size ()]); }
+    const_iterator cbegin () const { return const_iterator (&a_[0]); }
+    const_iterator cend ()   const { return const_iterator (&a_[size ()]); }
+    const_iterator begin () const { return cbegin (); }
+    const_iterator end ()   const { return cend (); }
+    void insert (const iterator &it, Dim d)
     {
         const int pos = (int) (& (*it) - & a_[0]);
         assert (pos >= 0 && pos <= size ());

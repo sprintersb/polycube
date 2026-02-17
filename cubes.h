@@ -17,6 +17,7 @@
 #include "hash.h"
 #include "dim.h"
 #include "util.h"
+#include "iterator-wrap.h"
 
 // The maximal possible length (in Manhattan metric) of the diagonal
 // of a Cubes' bounding box.  This is used during canonicalization.
@@ -39,27 +40,22 @@ enum
 };
 std::array<std::atomic<int64_t>, STAT_sentinel> stat;
 
-struct CubesIterator;
-struct CubesMuIterator;
 struct Pad;
 struct Dist;
 using VertexValues = std::array<int, 1 << DIM>;
 using DistPointers = std::array<Dist*, 1 << DIM>;
 
 // Cubes is a vector / array since that is most memory friendly.
+// Normalized such that bounding box lower is all 0's.
 struct Cubes
 {
 private:
-    // Normalized such that bounding box lower is all 0's.
 #ifdef CUBES_ARRAY
-    using cell_iterator = DimArray::CIterator;
-    using cell_muiterator = DimArray::Iterator;
-    DimArray cells;
+    using container_type = DimArray;
 #else
-    using cell_iterator = std::vector<Dim>::const_iterator;
-    using cell_muiterator = std::vector<Dim>::iterator;
-    std::vector<Dim> cells;
+    using container_type = std::vector<Dim>;
 #endif
+    container_type cells;
 
 public:
     Cubes () {}
@@ -239,62 +235,22 @@ public:
     bool canonicalizable_vertices (int dim, int &symmetry) const;
     bool maybe_canonicalize_vertices (const Box&, int dim);
     int maybe_symmetry (const DistPointers&, const Box&, int) const;
-    CubesMuIterator begin ();
-    CubesMuIterator end ();
-    CubesIterator begin () const;
-    CubesIterator end () const;
-    CubesIterator cbegin () const;
-    CubesIterator cend () const;
-    friend CubesIterator;
-    friend CubesMuIterator;
 
-    // Common tail.
+    using iterator =
+        IteratorWrap<container_type, container_type::iterator, Dim&>;
+    using const_iterator =
+        IteratorWrap<container_type, container_type::const_iterator, Dim>;
+    iterator begin () { return iterator (cells.begin ()); }
+    iterator end ()   { return iterator (cells.end ()); }
+    const_iterator cbegin () const { return const_iterator (cells.cbegin ()); }
+    const_iterator cend () const   { return const_iterator (cells.cend ()); }
+    const_iterator begin () const { return cbegin (); }
+    const_iterator end () const   { return cend (); }
 public:
     Box bounding_box () const;
     std::string ascii (char c = '*') const;
     friend std::ostream& operator << (std::ostream&, const Cubes&);
 };
-
-struct CubesIterator
-{
-    Cubes::cell_iterator it;
-    void operator ++ () { ++it; }
-    bool operator == (const CubesIterator &r) const { return it == r.it; }
-    bool operator != (const CubesIterator &r) const { return it != r.it; }
-    Dim operator * () const { return *it; }
-};
-
-struct CubesMuIterator
-{
-    Cubes::cell_muiterator it;
-    void operator ++ () { ++it; }
-    bool operator == (const CubesMuIterator &r) const { return it == r.it; }
-    bool operator != (const CubesMuIterator &r) const { return it != r.it; }
-    Dim& operator * () const { return *it; }
-};
-
-inline CubesIterator Cubes::cbegin () const
-{
-    return CubesIterator { cells.cbegin () };
-}
-
-inline CubesIterator Cubes::cend () const
-{
-    return CubesIterator { cells.cend () };
-}
-
-inline CubesIterator Cubes::begin () const { return cbegin (); }
-inline CubesIterator Cubes::end () const   { return cend (); }
-
-inline CubesMuIterator Cubes::begin ()
-{
-    return CubesMuIterator { cells.begin () };
-}
-
-inline CubesMuIterator Cubes::end ()
-{
-    return CubesMuIterator { cells.end () };
-}
 
 inline void Cubes::flip (int mask, const Box &bbox)
 {
@@ -329,6 +285,11 @@ inline void Cubes::swap (int a, int b)
 
 struct Pad : std::set<Cubes> {};
 
+// Mn is used to encode a traversal of the hyperoctahedral group Oh of
+// dimension n.  Each letter stands for an elemment of Oh that yields an
+// element of Oh not yet encountered.  There is no known formula for such a
+// traversal that works in any dimension, hence use the tight encoding below.
+// Plus, this is in the hot path, and we want to avoid dups at any cost.
 #define M2  "111"
 #define M3  M2 "2" M2 "3" M2 "3" M2 "4" M2 "2" M2
 #define M4  M3 "5" M3 "5" M3 "6" M3 "5" M3 "6" M3 "5" M3 "5" M3
@@ -378,6 +339,8 @@ Pad Cubes::congruents (int dim) const
 // Keeping track of how many cublis have a specific distance to a vertex
 // of the bounding box.  The lengths of the diagonals of our bounding boxes
 // are all below MAX_DIAGONAL_LENGTH (in Manhattan metric).
+// This struct is in the hot path, so we use a managed std::array instead
+// of a more dynamic container like std::vector or std::map.
 using DistBase = std::array<int16_t, 1 + MAX_DIAGONAL_LENGTH>;
 struct Dist : DistBase
 {
