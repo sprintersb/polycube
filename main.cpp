@@ -44,7 +44,8 @@ int main_polycube (int argc, char *argv[])
 
     // See birthday paradox.
     const double p_slow_collide = 0.2;
-    const int n_slots = (int) (max_threads * max_threads / 2 / p_slow_collide);
+    const int n_slots
+        = std::max<int> (1, max_threads * max_threads / 2 / p_slow_collide);
     std::cout << "Slots      : " << n_slots << "\n";
 
     max_possible_corona = 2 * (dim - 1) * level + 2;
