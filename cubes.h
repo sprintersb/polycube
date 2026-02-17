@@ -471,9 +471,17 @@ int Cubes::maybe_symmetry (const DistPointers &pc,
 int Cubes::multiplicity () const
 {
     int symmetry;
-    return canonicalizable_vertices (DIM, symmetry)
-        ? hyperoctahedral_order (DIM) >> (symmetry >= 0)
-        : (int) congruents (DIM).size ();
+    if (canonicalizable_vertices (DIM, symmetry))
+        return hyperoctahedral_order (DIM) >> (symmetry >= 0);
+    if (DIM >= 3)
+    {
+        Cubes c (*this);
+        Box bbox = c.bounding_box ();
+        const int dim = std::max (1, c.squeeze (bbox));
+        if (dim == DIM - 1 && c.canonicalizable_vertices (dim, symmetry))
+            return DIM * (hyperoctahedral_order (dim) >> (symmetry >= 0));
+    }
+    return (int) congruents (DIM).size ();
 }
 
 inline bool Cubes::canonicalizable_vertices (int dim, int &symmetry) const
