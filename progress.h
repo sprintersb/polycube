@@ -13,6 +13,7 @@
 template<typename T>
 struct Progress
 {
+    static inline bool quiet = 0;
     using value_type = T;
     T total;
     T margin;
@@ -37,7 +38,8 @@ struct Progress
     void update (T t)
     {
         assert (! done_p && "done't update a done Progress");
-        if (! started || t - last_report >= margin)
+        if (! Progress::quiet
+            && (! started || t - last_report >= margin))
         {
             std::ostringstream stream;
             printer (stream, *this, t);
@@ -51,17 +53,20 @@ struct Progress
     }
     static void print_bar (std::ostringstream &ost, int bar_len, double frac)
     {
-        char proz[100];
-        const int len_text = std::sprintf (proz, " %.2f%%", 100.0 * frac);
-        const int len_bars = bar_len - len_text - (int) ost.str().length();
-        const int n_bars = std::max<int> (1, frac * len_bars);
-        Progress::write (ost, '#', n_bars);
-        Progress::write (ost, ' ', len_bars - n_bars);
-        ost << proz;
+        if (! Progress::quiet)
+        {
+            char proz[100];
+            const int len_text = std::sprintf (proz, " %.2f%%", 100.0 * frac);
+            const int len_bars = bar_len - len_text - (int) ost.str().length();
+            const int n_bars = std::max<int> (1, frac * len_bars);
+            Progress::write (ost, '#', n_bars);
+            Progress::write (ost, ' ', len_bars - n_bars);
+            ost << proz;
+        }
     }
     void done ()
     {
-        if (! done_p)
+        if (! Progress::quiet && ! done_p)
         {
             erase ();
             std::cout.flush ();
@@ -70,14 +75,18 @@ struct Progress
     }
     static void write (std::ostream &ost, char c, int n)
     {
+        if (! Progress::quiet)
         for (int i = 0; i < n; ++i)
             ost << c;
     }
     void erase ()
     {
-        Progress::write (std::cout, '\b', len);
-        Progress::write (std::cout, ' ', len);
-        Progress::write (std::cout, '\b', len);
+        if (! Progress::quiet)
+        {
+            Progress::write (std::cout, '\b', len);
+            Progress::write (std::cout, ' ', len);
+            Progress::write (std::cout, '\b', len);
+        }
         len = 0;
     }
     ~Progress ()
