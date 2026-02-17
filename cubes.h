@@ -18,6 +18,16 @@
 #include "dim.h"
 #include "util.h"
 
+// The maximal possible length (in Manhattan metric) of the diagonal
+// of a Cubes' bounding box.  This is used during canonicalization.
+#if !defined MAX_DIAGONAL_LENGTH
+#ifdef CUBES_ARRAY
+#define MAX_DIAGONAL_LENGTH CELLS
+#else
+#define MAX_DIAGONAL_LENGTH 80
+#endif
+#endif // MAX_DIAGONAL_LENGTH
+
 // The relative cost of a vertex canonicalization compared to one
 // step of traversing the hyperoctahedral group.  For stats only.
 #define VERTEX_CANONICALIZATION_COST 4
@@ -365,10 +375,10 @@ Pad Cubes::congruents (int dim) const
     return pad;
 }
 
-// Keeping track of how many cublis have a specific distance to
-// a vertex of the bounding box.  The lengths of the diagonals
-// of our bounding boxes are all below 80 (in Manhattan metric).
-using DistBase = std::array<int16_t, 80>;
+// Keeping track of how many cublis have a specific distance to a vertex
+// of the bounding box.  The lengths of the diagonals of our bounding boxes
+// are all below MAX_DIAGONAL_LENGTH (in Manhattan metric).
+using DistBase = std::array<int16_t, 1 + MAX_DIAGONAL_LENGTH>;
 struct Dist : DistBase
 {
     int id = -1;
@@ -417,7 +427,7 @@ private:
     int size_ = 0;
     void resize (int i)
     {
-        assert (i < (int) DistBase::size ());
+        assert (i < (int) DistBase::size () && "see MAX_DIAGONAL_LENGTH");
         size_ = i;
     }
     iterator begin () = delete;
