@@ -98,7 +98,15 @@ public:
     }
     bool operator == (const Cubes &r) const
     {
-        return this->cmp (r) == 0;
+        if (size () != r.size ())
+            return false;
+        auto p2 = r.cells.begin ();
+        for (Dim d : cells)
+            if (d != *p2)
+                return false;
+            else
+                ++p2;
+        return true;
     }
     bool operator < (const Cubes &r) const
     {
