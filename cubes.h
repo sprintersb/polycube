@@ -18,11 +18,23 @@
 #include "dim.h"
 #include "util.h"
 
+// The relative cost of a vertex canonicalization compared to one
+// step of traversing the hyperoctahedral group.  For stats only.
+#define VERTEX_CANONICALIZATION_COST 4
+
+enum
+{
+    STAT_FAIL, STAT_SUCC, STAT_COST_FAIL, STAT_COST_SUCC,
+    STAT_sentinel
+};
+std::array<std::atomic<int64_t>, STAT_sentinel> stat;
+
 struct CubesIterator;
 struct CubesMuIterator;
 struct Pad;
 struct Dist;
 using VertexValues = std::array<int, 1 << DIM>;
+using DistPointers = std::array<Dist*, 1 << DIM>;
 
 // Cubes is a vector / array since that is most memory friendly.
 struct Cubes
@@ -164,8 +176,25 @@ public:
         }
         return c;
     }
+    int squeeze (Box &bbox)
+    {
+        int l = 0, r = DIM - 1;
+        for (bool swapped = false; ; swapped = true)
+        {
+            while (r > 0 && bbox.hi[r] == 0)  --r;
+            while (l < r && bbox.hi[l] != 0)  ++l;
+            if (l >= r)
+            {
+                if (swapped)
+                    sort ();
+                return 1 + r;
+            }
+            swap (l, r);
+            std::swap (bbox.hi.v[l], bbox.hi.v[r]);
+        }
+    }
     // This is usually not needed since add() adds Dim's in order.
-    // For now, this is only used after bulk changes like in rotated().
+    // It must be run after bulk changes like in rotate() or squeeze().
     void sort ()
     {
         // For now we prefer qsort over std::sort since the former
@@ -187,7 +216,7 @@ private:
     void swap (int, int);
     bool matches_flipped (int dim, const Box&) const;
 public:
-    Pad congruents () const;
+    Pad congruents (int dim) const;
     void canonicalize ();
     int multiplicity () const;
     Cubes canonical () const
@@ -196,10 +225,10 @@ public:
         c.canonicalize ();
         return c;
     }
-    int maybe_canonical_vertex (VertexValues&, const Box&, int&) const;
-    bool canonicalizable_vertices (int &symmetry) const;
-    bool maybe_canonicalize_vertices ();
-    int maybe_symmetry (const std::array<Dist*, 1 << DIM>&, const Box&) const;
+    int maybe_canonical_vertex (VertexValues&, const Box&, int dim, int&) const;
+    bool canonicalizable_vertices (int dim, int &symmetry) const;
+    bool maybe_canonicalize_vertices (const Box&, int dim);
+    int maybe_symmetry (const DistPointers&, const Box&, int) const;
     CubesMuIterator begin ();
     CubesMuIterator end ();
     CubesIterator begin () const;
@@ -295,14 +324,16 @@ struct Pad : std::set<Cubes> {};
 #define M4  M3 "5" M3 "5" M3 "6" M3 "5" M3 "6" M3 "5" M3 "5" M3
 #define M5  M4 "8" M4 "9" M4 "8" M4 "9" M4 "8" M4 "8" M4 "7" M4 "7" M4 "7" M4
 
-Pad Cubes::congruents () const
+Pad Cubes::congruents (int dim) const
 {
+    assert (dim >= 1 && dim <= DIM && "todo: DIM");
     Cubes c (*this);
     Pad pad;
     pad.insert (c);
     const char *S = "?";
-    switch (DIM)
+    switch (dim)
     {
+        case 1: S = "0"; break;
         case 2: S = M2 "0" M2; break;
         case 3: S = M3 "0" M3; break;
         case 4: S = M4 "0" M4; break;
@@ -315,45 +346,24 @@ Pad Cubes::congruents () const
         {
             default: assert (0 && "bad char");
             case 0: pad.insert (c = c.mirrored (0)); break;
-#define PADD(FF) pad.insert (c.FF); break
-            case 1: PADD (rotate (0, 1));
+            case 1: pad.insert (c.rotate (0, 1)); break;
 #if DIM >= 3
-            case 2: PADD (rotate (0, 2));
-            case 3: PADD (rotate (1, 2));
-            case 4: PADD (rotate (2, 1));
+            case 2: pad.insert (c.rotate (0, 2)); break;
+            case 3: pad.insert (c.rotate (1, 2)); break;
+            case 4: pad.insert (c.rotate (2, 1)); break;
 #endif
 #if DIM >= 4
-            case 5: PADD (rotate (3, 0));
-            case 6: PADD (rotate (3, 1));
+            case 5: pad.insert (c.rotate (3, 0)); break;
+            case 6: pad.insert (c.rotate (3, 1)); break;
 #endif
 #if DIM >= 5
-            case 7: PADD (rotate (4, 0));
-            case 8: PADD (rotate (4, 1));
-            case 9: PADD (rotate (3, 4));
+            case 7: pad.insert (c.rotate (4, 0)); break;
+            case 8: pad.insert (c.rotate (4, 1)); break;
+            case 9: pad.insert (c.rotate (3, 4)); break;
 #endif
-#undef PADD
         } // switch
     return pad;
 }
-
-std::array<std::atomic<int64_t>, 3> stat;
-
-void Cubes::canonicalize ()
-{
-    bool success = maybe_canonicalize_vertices ();
-    stat[success] += 1;
-    if (! success)
-        cells = std::move (congruents().begin()->cells);
-}
-
-int Cubes::multiplicity () const
-{
-    int symmetry;
-    return canonicalizable_vertices (symmetry)
-        ? hyperoctahedral_order (DIM) >> (symmetry >= 0)
-        : (int) congruents().size ();
-}
-
 
 // Keeping track of how many cublis have a specific distance to
 // a vertex of the bounding box.  The lengths of the diagonals
@@ -393,17 +403,15 @@ struct Dist : DistBase
                 return at (i) - r.at (i);
         return 0;
     }
-    bool neighbors_uniquely_sortable (const VertexValues &vvs) const
+    bool neighbors_uniquely_sortable (const VertexValues &vvs, int dim) const
     {
         unsigned bits = 0;
-        int n_bits = 0;
-        for (int j = 0; j < DIM; ++j)
-        {
-            const unsigned mask = 1u << vvs[id ^ (1 << j)];
-            n_bits += ! (bits & mask);
-            bits |= mask;
-        }
-        return n_bits == DIM;
+        for (int j = 0; j < dim; ++j)
+            if (const unsigned mask = 1u << vvs[id ^ (1 << j)]; bits & mask)
+                return false;
+            else
+                bits |= mask;
+        return true;
     }
 private:
     int size_ = 0;
@@ -428,19 +436,13 @@ std::ostream& operator << (std::ostream &ost, const Dist &c)
     return ost << "\n";
 }
 
-inline bool Cubes::canonicalizable_vertices (int &symmetry) const
+// Return the dimension number when there is respective simple
+// mirror symmetry, otherwise return -1.
+int Cubes::maybe_symmetry (const DistPointers &pc,
+                           const Box &bbox, int dim) const
 {
-    VertexValues vvs;
-    return maybe_canonical_vertex (vvs, bounding_box (), symmetry) >= 0;
-}
-
-// Return dim when there is respective simple mirror symmetry,
-// otherwise return -1.
-int Cubes::maybe_symmetry (const std::array<Dist*, 1 << DIM> &pc,
-                           const Box &bbox) const
-{
-    const int max_value = pc[(1 << DIM) - 1]->value;
-    if (max_value != (1 << (DIM - 1)) - 1)
+    const int max_value = pc[(1 << dim) - 1]->value;
+    if (max_value != (1 << (dim - 1)) - 1)
         return -1;
     // # valuations are exacly half of HOh's symmetries, which is a
     // hallmark for mirror symmetry.
@@ -448,25 +450,55 @@ int Cubes::maybe_symmetry (const std::array<Dist*, 1 << DIM> &pc,
     // For now, only consider simple reflections, i.e. symmetry has popcount 1.
     if (symmetry & (symmetry - 1))
         return -1;
-    for (int i = 2; i < 1 << DIM; i += 2)
+    for (int i = 2; i < 1 << dim; i += 2)
         if ((pc[i]->id ^ pc[i + 1]->id) != symmetry)
             return -1;
     // All looks good until now, but we need a final proof.
-    const int dim = count_trailing_zeros (symmetry);
-    if (! matches_flipped (dim, bbox))
-        return -1;
-    return dim;
+    const int d = count_trailing_zeros (symmetry);
+    return matches_flipped (d, bbox) ? d : -1;
+}
+
+int Cubes::multiplicity () const
+{
+    int symmetry;
+    return canonicalizable_vertices (DIM, symmetry)
+        ? hyperoctahedral_order (DIM) >> (symmetry >= 0)
+        : (int) congruents (DIM).size ();
+}
+
+inline bool Cubes::canonicalizable_vertices (int dim, int &symmetry) const
+{
+    VertexValues vvs;
+    return maybe_canonical_vertex (vvs, bounding_box (), dim, symmetry) >= 0;
+}
+
+void Cubes::canonicalize ()
+{
+    Box bbox = bounding_box ();
+    assert (bbox.lo == Dim::all0 && "expecting aligned cubes");
+    assert (bbox.hi.dist (bbox.lo) < (int) std::tuple_size<DistBase>::value
+            && "Cubes diameter exceeds DistBase capacity");
+    const int dim = DIM >= 3
+        ? std::max (1, squeeze (bbox))
+        : DIM;
+    const bool success = maybe_canonicalize_vertices (bbox, dim);
+    stat[success] += 1;
+    stat[2 + success] += success
+        ? VERTEX_CANONICALIZATION_COST + (dim != DIM)
+        : hyperoctahedral_order (dim) + (dim != DIM);
+    if (! success)
+        cells = std::move (congruents (dim).begin()->cells);
 }
 
 // Return the id of a canonical vertex in [0, 2^DIM), or -1 if not found.
 // Set symmetry to a dimension of mirror symmetry, or -1 if none such.
 int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox,
-                                   int &symmetry) const
+                                   int dim, int &symmetry) const
 {
     symmetry = -1;
     // For each cubli, record its man distances to any of the bounding vertices.
     std::array<Dist, 1 << DIM> vdist;
-    for (int id = 0; id < 1 << DIM; ++id)
+    for (int id = 0; id < 1 << dim; ++id)
     {
         // The id of a vertex is the canonical integer in [0, 2^DIM).
         Dist &vd = vdist[id];
@@ -480,10 +512,10 @@ int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox,
     }
 
     // Sort vdist[].
-    std::array<Dist*, 1 << DIM> pc;
-    for (int id = 0; id < 1 << DIM; ++id)
+    DistPointers pc;
+    for (int id = 0; id < 1 << DIM /* sic! to avoid warn */; ++id)
         pc[id] = & vdist[id];
-    std::sort (pc.begin (), pc.end (),
+    std::sort (pc.begin (), pc.begin () + (1 << dim),
                [] (const Dist *pa, const Dist *pb) -> bool
                {
                    return pa->cmp (*pb) < 0;
@@ -491,43 +523,39 @@ int Cubes::maybe_canonical_vertex (VertexValues &vvs, const Box &bbox,
     // Add valuations in increasing order, assigning same valuation
     // if it matches the predecessor's.
     pc[0]->value = 0;
-    for (size_t b = 1; b < 1 << DIM; ++b)
+    for (int b = 1; b < 1 << dim; ++b)
         pc[b]->value = pc[b - 1]->value + (pc[b]->cmp (*pc[b - 1]) > 0);
-    const int max_value = pc[(1 << DIM) - 1]->value;
+    const int max_value = pc[(1 << dim) - 1]->value;
     // We are after the vertex -> valuation.  Transfer them from auto to output.
-    for (size_t id = 0; id < 1 << DIM; ++id)
+    for (int id = 0; id < 1 << dim; ++id)
         vvs[id] = vdist[id].value;
     // Shortcut: When all vertex dists are different, we always succeed.
-    if (max_value == (1 << DIM) - 1)
+    if (max_value == (1 << dim) - 1)
         // Canonical: Use the vertex with the smallest valuation.
         return pc[0]->id;
 
-    if ((symmetry = maybe_symmetry (pc, bbox)) >= 0)
+    if ((symmetry = maybe_symmetry (pc, bbox, dim)) >= 0)
         return pc[0]->id;
 
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
-    for (int b = 0; b < 1 << DIM; ++b)
+    for (int b = 0; b < 1 << dim; ++b)
     {
         bool good = true;
         good &= b == 0              || pc[b]->value > pc[b - 1]->value;
-        good &= b == (1 << DIM) - 1 || pc[b]->value < pc[b + 1]->value;
-        if (good && pc[b]->neighbors_uniquely_sortable (vvs))
+        good &= b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value;
+        if (good && pc[b]->neighbors_uniquely_sortable (vvs, dim))
             // Canonical: The vertex with the smallest unique valuation.
             return pc[b]->id;
     }
     return -1;
 }
 
-bool Cubes::maybe_canonicalize_vertices ()
+bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
 {
-    const Box bbox = bounding_box ();
-    assert (bbox.lo == Dim::all0 && "expecting aligned cubes");
-    assert (bbox.hi.dist (bbox.lo) < (int) std::tuple_size<DistBase>::value
-            && "Cubes diameter exceeds DistBase capacity");
     VertexValues vvs;
     int symmetry;
-    const int id = maybe_canonical_vertex (vvs, bbox, symmetry);
+    const int id = maybe_canonical_vertex (vvs, bbox, dim, symmetry);
     if (id < 0)
         return false;
 
@@ -538,34 +566,34 @@ bool Cubes::maybe_canonicalize_vertices ()
     {
         p2.flip (id, bbox);
         // Adjust vvs accordingly.
-        for (int b = 0; b < 1 << DIM; ++b)
+        for (int b = 0; b < 1 << dim; ++b)
             if (b > (b ^ id))
                 std::swap (vvs[b], vvs[b ^ id]);
     }
-    // Now sort the DIM vertices adjacent to id.
+    // Now sort the dim vertices adjacent to id.
     uint64_t todo = 0;
-    for (int b = 0; b < DIM; ++b)
+    for (int b = 0; b < dim; ++b)
         todo |= (uint64_t) 1 << vvs[1 << b];
-    // Vertex 0 has DIM neighbors, canonicalize them such that higher
+    // Vertex 0 has dim neighbors, canonicalize them such that higher
     // dimension neighbors get higher vertex values.
-    for (int dim = 0; dim < DIM - 1; ++dim, todo &= todo - 1)
+    for (int d = 0; d < dim - 1; ++d, todo &= todo - 1)
     {
         assert (todo);
         const int lsb = count_trailing_zeros (todo);
         // Search the vertex with the value as specified by todo in
         // the vertex -> value list. We only have to look for vertex
         // indices that are a power of 2 (and hence are a neighbors of 0).
-        for (int b = 0; b < DIM; ++b)
+        for (int b = 0; b < dim; ++b)
             if (vvs[1 << b] == lsb
-                && b != dim)
+                && b != d)
             {
                 // Make vertex b the next neighbor of vertex 0.
-                p2.swap (dim, b);
+                p2.swap (d, b);
                 // Adjust vvs accordingly.
-                for (int i = 0; i < DIM; ++i)
+                for (int i = 0; i < dim; ++i)
                 {
                     const int u = 1 << i;
-                    const int v = bitswap (u, dim, b);
+                    const int v = bitswap (u, d, b);
                     if (u > v)
                         std::swap (vvs[u], vvs[v]);
                 }

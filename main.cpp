@@ -77,9 +77,9 @@ int main_polycube (int argc, char *argv[])
         }
         else
         {
-            stat[0] = 0;
-            stat[1] = 0;
-            stat[2] = 0;
+            for (auto &s : stat)
+                s = 0;
+
             if (way == 4)
             {
                 int corona_margin = extra_spice;
@@ -122,20 +122,27 @@ int main_polycube (int argc, char *argv[])
         }
 
         // Stat about fraction of fast canonicalization.
-        auto tot = stat[0] + stat[1];
+        const int64_t s0 = stat[STAT_FAIL];
+        const int64_t s1 = stat[STAT_SUCC];
+        const int64_t s2 = stat[STAT_COST_FAIL];
+        const int64_t s3 = stat[STAT_COST_SUCC];
+        auto tot = s0 + s1;
         if (tot)
         {
-            const double canon_cost = 4;
-            double f0 = tot ? (double) +stat[0] / tot : 0.0;
-            double f1 = tot ? (double) +stat[1] / tot : 0.0;
+            const double f0 = tot ? (double) s0 / tot : 0.0;
+            const double f1 = tot ? (double) s1 / tot : 0.0;
             printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)",
-                    +stat[0], 100 * f0, +stat[1], 100 * f1);
+                    s0, 100 * f0, s1, 100 * f1);
+            const double cf0 = s0 ? (double) s2 / s0 : 0.0;
+            const double cf1 = s1 ? (double) s3 / s1 : 0.0;
             printf ("\t Cost factor: %.1f + %.1f = %.1f\n",
-                    f0 * hyperoctahedral_order (DIM), f1 * canon_cost,
-                    f0 * hyperoctahedral_order (DIM) + f1 * canon_cost);
+                    cf0, cf1, f0 * cf0 + f1 * cf1);
         }
         else
             printf ("Cost factor: %.1f\n", 0.0 + hyperoctahedral_order (DIM));
+        if (int ci = cube_count_canon (dim, i); ci >= 0)
+            if (int ci1 = cube_count_canon (dim - 1, i); ci1 >= 0)
+                printf ("free %dd = %.1f%%\n", DIM - 1, 100. * ci1 / ci);
 
         if (way == 4)
             poly = PolyCube::Poly (vset[i]);
