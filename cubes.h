@@ -7,6 +7,7 @@
 #include <array>
 #include <vector>
 #include <set>
+#include <unordered_set>
 #include <utility> // std::swap
 #include <algorithm> // std::sort
 #include <optional>
@@ -47,7 +48,6 @@ enum
 };
 std::array<std::atomic<int64_t>, STAT_sentinel> stat;
 
-struct Pad;
 struct Dist;
 using VertexValues = std::array<int, 1 << DIM>;
 using DistPointers = std::array<Dist*, 1 << DIM>;
@@ -232,8 +232,17 @@ private:
     // Swap the specified dimensions.  !!! This will trash the ordering !!!
     void swap (int, int);
     bool matches_flipped (int dim, const Box&) const;
+    template<typename T>
+    struct CongruentsAspect
+    {
+        void insert (const T&);
+        bool ready () const;
+        const T& value () const;
+        T& value ();
+    };
 public:
-    Pad congruents (int dim) const;
+    template<typename T>
+    T congruents (int dim) const;
     void canonicalize ();
     int multiplicity () const;
     Cubes canonical () const
@@ -294,8 +303,6 @@ inline void Cubes::swap (int a, int b)
     }
 }
 
-struct Pad : std::set<Cubes> {};
-
 // Mn is used to encode a traversal of the hyperoctahedral group Oh of
 // dimension n.  Each letter stands for an elemment of Oh that yields an
 // element of Oh not yet encountered.  There is no known formula for such a
@@ -306,12 +313,13 @@ struct Pad : std::set<Cubes> {};
 #define M4  M3 "5" M3 "5" M3 "6" M3 "5" M3 "6" M3 "5" M3 "5" M3
 #define M5  M4 "8" M4 "9" M4 "8" M4 "9" M4 "8" M4 "8" M4 "7" M4 "7" M4 "7" M4
 
-Pad Cubes::congruents (int dim) const
+template<typename T>
+inline T Cubes::congruents (int dim) const
 {
     assert (dim >= 1 && dim <= DIM && "todo: DIM");
     Cubes c (*this);
-    Pad pad;
-    pad.insert (c);
+    CongruentsAspect<T> aspect;
+    aspect.insert (c);
     const char *S = "?";
     switch (dim)
     {
@@ -323,28 +331,28 @@ Pad Cubes::congruents (int dim) const
         default:
             assert (0 && "todo: canonicalize in DIM");
     }
-    for (auto s = S; *s; ++s)
+    for (auto s = S; *s && !aspect.ready(); ++s)
         switch (*s - '0')
         {
             default: assert (0 && "bad char");
-            case 0: pad.insert (c = c.mirrored (0)); break;
-            case 1: pad.insert (c.rotate (0, 1)); break;
+            case 0: aspect.insert (c = c.mirrored (0)); break;
+            case 1: aspect.insert (c.rotate (0, 1)); break;
 #if DIM >= 3
-            case 2: pad.insert (c.rotate (0, 2)); break;
-            case 3: pad.insert (c.rotate (1, 2)); break;
-            case 4: pad.insert (c.rotate (2, 1)); break;
+            case 2: aspect.insert (c.rotate (0, 2)); break;
+            case 3: aspect.insert (c.rotate (1, 2)); break;
+            case 4: aspect.insert (c.rotate (2, 1)); break;
 #endif
 #if DIM >= 4
-            case 5: pad.insert (c.rotate (3, 0)); break;
-            case 6: pad.insert (c.rotate (3, 1)); break;
+            case 5: aspect.insert (c.rotate (3, 0)); break;
+            case 6: aspect.insert (c.rotate (3, 1)); break;
 #endif
 #if DIM >= 5
-            case 7: pad.insert (c.rotate (4, 0)); break;
-            case 8: pad.insert (c.rotate (4, 1)); break;
-            case 9: pad.insert (c.rotate (3, 4)); break;
+            case 7: aspect.insert (c.rotate (4, 0)); break;
+            case 8: aspect.insert (c.rotate (4, 1)); break;
+            case 9: aspect.insert (c.rotate (3, 4)); break;
 #endif
         } // switch
-    return pad;
+    return aspect.value ();
 }
 
 // Keeping track of how many cublis have a specific distance to a vertex
@@ -420,6 +428,82 @@ std::ostream& operator << (std::ostream &ost, const Dist &c)
     return ost << "\n";
 }
 
+// We are only interested in a canonical congruent.
+template<>
+struct Cubes::CongruentsAspect<Cubes>
+{
+    Cubes min_cubes;
+    Cubes& value () { return min_cubes; }
+    const Cubes& value () const { return min_cubes; }
+    void insert (const Cubes &c)
+    {
+        if (min_cubes.size () == 0 || c < min_cubes)
+            min_cubes = c;
+    }
+    bool ready () const { return false; }
+};
+
+
+// We are only interested in the number of congruents.
+template<>
+struct Cubes::CongruentsAspect<int>
+{
+    static constexpr int hoho = hyperoctahedral_order (DIM);
+    int size_ = 0;
+    int& value () { return size_; }
+    const int& value () const { return size_; }
+    bool ready () const
+    {
+        return size_ == hoho;
+    }
+    void insert (const Cubes &c)
+    {
+        if (! ready ())
+            do_insert (c);
+    }
+private:
+    void set_size (int sz)
+    {
+        assert (sz <= hoho);
+        // HOh is a group of order hoho, hence when we see more than
+        // hoho / 2 elements then we know that it generates all of HOh.
+        size_ = sz > hoho / 2 ? hoho : sz;
+    }
+    // As it seems, even in dimension 5 with hoho = 3840, a managed
+    // std::array beats std::unordered_set (and std::set).  Reasons are
+    // that std::array lives on the stack and doesn't require expensive
+    // heap memory, and it neither requires hashes nor Cubes < Cubes.
+#if DIM <= 5
+    std::array<Cubes, hoho> cubs;
+    void do_insert (const Cubes &c)
+    {
+        for (int i = 0; i < size_; ++i)
+            if (cubs[i] == c)
+                return;
+        set_size (1 + size_);
+        cubs[size_ - 1] = c;
+    }
+#else
+#warning profile this before using
+    struct Hash
+    {
+        Hasher32::type operator () (const Cubes &c) const
+        {
+            Hasher32::type h = 0;
+            for (Dim d : c)
+                h = Hasher32::add (h, d.ival());
+            return h;
+        }
+    };
+    std::unordered_set<Cubes, Hash> cubs;
+    void do_insert (const Cubes &c)
+    {
+        cubs.insert (c);
+        set_size ((int) cubs.size ());
+    }
+#endif
+};
+
 // Return the dimension number when there is respective simple mirror symmetry.
 auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
                            int dim) const -> Symmetry
@@ -454,7 +538,7 @@ int Cubes::multiplicity () const
         if (dim == DIM - 1 && c.canonicalizable_vertices (dim, symmetry))
             return DIM * (hyperoctahedral_order (dim) >> !! symmetry);
     }
-    return (int) congruents (DIM).size ();
+    return congruents<int> (DIM);
 }
 
 inline bool Cubes::canonicalizable_vertices (int dim, Symmetry &symmetry) const
@@ -478,7 +562,7 @@ void Cubes::canonicalize ()
         ? VERTEX_CANONICALIZATION_COST + (dim != DIM)
         : hyperoctahedral_order (dim) + (dim != DIM);
     if (! success)
-        cells = std::move (congruents (dim).begin()->cells);
+        cells = std::move (congruents<Cubes> (dim).cells);
 }
 
 // Return optional id of a canonical vertex in [0, 2^DIM).
