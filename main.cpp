@@ -16,6 +16,7 @@ int main_polycube (int argc, char *argv[])
     int way = 0;
     int extra_spice = 0;
     int leap = 1;
+    Cubes::take_stat = false;
 
     if (argc > 1)   sscanf (argv[1], "%i", &dim);
     if (argc > 2)   sscanf (argv[2], "%i", &level);
@@ -51,6 +52,7 @@ int main_polycube (int argc, char *argv[])
     max_possible_corona = 2 * (dim - 1) * level + 2;
     std::cout << "maxi corona: " << max_possible_corona << "\n";
     std::cout << "canonical o: " << PolyCube::canonical_only << "\n";
+    std::cout << "take stat  : " << Cubes::take_stat << "\n";
 
     std::vector<PolyCube::Set> set (1 + level);     // Way 0
     std::vector<PolyCube::Vector> vset (1 + level); // Way 4, 5
@@ -122,25 +124,29 @@ int main_polycube (int argc, char *argv[])
             }
         }
 
-        // Stat about fraction of fast canonicalization.
-        const int64_t s0 = stat[STAT_FAIL];
-        const int64_t s1 = stat[STAT_SUCC];
-        const int64_t s2 = stat[STAT_COST_FAIL];
-        const int64_t s3 = stat[STAT_COST_SUCC];
-        auto tot = s0 + s1;
-        if (tot)
+        if (Cubes::take_stat)
         {
-            const double f0 = tot ? (double) s0 / tot : 0.0;
-            const double f1 = tot ? (double) s1 / tot : 0.0;
-            printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)",
-                    s0, 100 * f0, s1, 100 * f1);
-            const double cf0 = s0 ? (double) s2 / s0 : 0.0;
-            const double cf1 = s1 ? (double) s3 / s1 : 0.0;
-            printf ("\t Cost factor: %.1f + %.1f = %.1f\n",
-                    cf0, cf1, f0 * cf0 + f1 * cf1);
-        }
-        else
-            printf ("Cost factor: %.1f\n", 0.0 + hyperoctahedral_order (DIM));
+            // Stat about fraction of fast canonicalization.
+            const int64_t s0 = stat[STAT_FAIL];
+            const int64_t s1 = stat[STAT_SUCC];
+            const int64_t s2 = stat[STAT_COST_FAIL];
+            const int64_t s3 = stat[STAT_COST_SUCC];
+            auto tot = s0 + s1;
+            if (tot)
+            {
+                const double f0 = tot ? (double) s0 / tot : 0.0;
+                const double f1 = tot ? (double) s1 / tot : 0.0;
+                printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)",
+                        s0, 100 * f0, s1, 100 * f1);
+                const double cf0 = s0 ? (double) s2 / s0 : 0.0;
+                const double cf1 = s1 ? (double) s3 / s1 : 0.0;
+                printf ("\t Cost factor: %.1f + %.1f = %.1f\n",
+                        cf0, cf1, f0 * cf0 + f1 * cf1);
+            }
+            else
+                printf ("Cost factor: %.1f\n", 0. + hyperoctahedral_order(DIM));
+        } // Cubes::take_stat
+
         if (int ci = cube_count_canon (dim, i); ci >= 0)
             if (int ci1 = cube_count_canon (dim - 1, i); ci1 >= 0)
                 printf ("free %dd = %.1f%%\n", DIM - 1, 100. * ci1 / ci);

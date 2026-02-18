@@ -65,6 +65,7 @@ private:
     container_type cells;
 
 public:
+    static inline bool take_stat;
     // Mirror symmetry along the specified dimension.
     using Symmetry = std::optional<int>;
 
@@ -557,10 +558,13 @@ void Cubes::canonicalize ()
         ? std::max (1, squeeze (bbox))
         : DIM;
     const bool success = maybe_canonicalize_vertices (bbox, dim);
-    stat[success] += 1;
-    stat[2 + success] += success
-        ? VERTEX_CANONICALIZATION_COST + (dim != DIM)
-        : hyperoctahedral_order (dim) + (dim != DIM);
+    if (Cubes::take_stat)
+    {
+        stat[success] += 1;
+        stat[2 + success] += success
+            ? VERTEX_CANONICALIZATION_COST + (dim != DIM)
+            : hyperoctahedral_order (dim) + (dim != DIM);
+    }
     if (! success)
         cells = std::move (congruents<Cubes> (dim).cells);
 }
