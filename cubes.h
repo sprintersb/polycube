@@ -27,11 +27,12 @@
 #ifdef CELLS
 #define MAX_DIAGONAL_LENGTH CELLS
 #else
+#warning using MAX_DIAGONAL_LENGTH = 80
 #define MAX_DIAGONAL_LENGTH 80
 #endif
 #endif // MAX_DIAGONAL_LENGTH
 
-// For sizes up to SORT_THRESHOLD we sort by re-building he cells.
+// For sizes up to SORT_THRESHOLD we sort by re-building the cells.
 // For values above we use std::sort on garbled cells.
 #ifndef SORT_THRESHOLD
 #define SORT_THRESHOLD 14
@@ -69,6 +70,7 @@ public:
     // Mirror symmetry along the specified dimension.
     using Symmetry = std::optional<int>;
 
+    // The id of a vertex in [0, 2^DIM).
     using Vertex = std::optional<int>;
 
     Cubes () {}
@@ -87,14 +89,12 @@ public:
         auto p2 = c.cells.begin ();
         auto e2 = c.cells.end ();
         for (Dim d : cells)
-        {
             if (p2 == e2)
                 return 1;
-            const int i = d.cmp (*p2);
-            if (i)
+            else if (const int i = d.cmp (*p2); i != 0)
                 return i;
-            ++p2;
-        }
+            else
+                ++p2;
         return p2 == e2 ? 0 : -1;
     }
     bool operator == (const Cubes &r) const
@@ -147,6 +147,8 @@ public:
                 break;
             }
     }
+    // Notice that shift() is compatible with Dim.cmp(), hence
+    // order will be retained.
     void shift (int i, int off)
     {
         for (Dim &d : cells)
@@ -173,7 +175,7 @@ public:
             Cubes c;
             for (Dim d : cells)
             {
-                int y = xm - d[i];
+                const int y = xm - d[i];
                 d.set (i, d[j]);
                 d.set (j, y);
                 c.add (d);
@@ -184,7 +186,7 @@ public:
         {
             for (Dim &d : cells)
             {
-                int y = xm - d[i];
+                const int y = xm - d[i];
                 d.set (i, d[j]);
                 d.set (j, y);
             }
@@ -268,7 +270,16 @@ public:
     const_iterator begin () const { return cbegin (); }
     const_iterator end () const   { return cend (); }
 public:
-    Box bounding_box () const;
+    Box bounding_box () const
+    {
+        Box box { size() ? cells[0] : Dim::Max, size() ? cells[0] : Dim::Min };
+        for (int i = 1; i < size (); ++i)
+        {
+            box.lo.min (cells[i]);
+            box.hi.max (cells[i]);
+        }
+        return box;
+    }
     std::string ascii (char c = '*') const;
     friend std::ostream& operator << (std::ostream&, const Cubes&);
 };
@@ -451,11 +462,15 @@ struct Cubes::CongruentsAspect<int>
 {
     static constexpr int hoho = hyperoctahedral_order (DIM);
     int size_ = 0;
-    int& value () { return size_; }
-    const int& value () const { return size_; }
+    int value () const
+    {
+        // HOh is a group of order hoho, hence when we see more than
+        // hoho / 2 elements then we know that it generates all of HOh.
+        return size_ > hoho / 2 ? hoho : size_;
+    }
     bool ready () const
     {
-        return size_ == hoho;
+        return size_ > hoho / 2;
     }
     void insert (const Cubes &c)
     {
@@ -465,17 +480,15 @@ struct Cubes::CongruentsAspect<int>
 private:
     void set_size (int sz)
     {
-        assert (sz <= hoho);
-        // HOh is a group of order hoho, hence when we see more than
-        // hoho / 2 elements then we know that it generates all of HOh.
-        size_ = sz > hoho / 2 ? hoho : sz;
+        assert (sz <= 1 + hoho / 2);
+        size_ = sz;
     }
     // As it seems, even in dimension 5 with hoho = 3840, a managed
     // std::array beats std::unordered_set (and std::set).  Reasons are
     // that std::array lives on the stack and doesn't require expensive
     // heap memory, and it neither requires hashes nor Cubes < Cubes.
 #if DIM <= 5
-    std::array<Cubes, hoho> cubs;
+    std::array<Cubes, 1 + hoho / 2> cubs;
     void do_insert (const Cubes &c)
     {
         for (int i = 0; i < size_; ++i)
@@ -639,6 +652,7 @@ bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
     if (! vertex)
         return false;
 
+    bool garbled = false;
     const int id = vertex.value ();
     assert (vvs.size () == 1 << DIM);
     Cubes p2 (*this);
@@ -646,6 +660,7 @@ bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
     if (id != 0)
     {
         p2.flip (id, bbox);
+        garbled = true;
         // Adjust vvs accordingly.
         for (int b = 0; b < 1 << dim; ++b)
             if (b > (b ^ id))
@@ -670,6 +685,7 @@ bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
             {
                 // Make vertex b the next neighbor of vertex 0.
                 p2.swap (d, b);
+                garbled = true;
                 // Adjust vvs accordingly.
                 for (int i = 0; i < dim; ++i)
                 {
@@ -684,28 +700,22 @@ bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
     // clobbered cells' order.  Re-construct a proper one.
     if (size () <= SORT_THRESHOLD)
     {
-        cells.clear ();
-        for (Dim d : p2)
-            add (d);
+        if (garbled)
+        {
+            cells.clear ();
+            for (Dim d : p2)
+                add (d);
+        }
+        else
+            cells = std::move (p2.cells);
     }
     else
     {
         cells = std::move (p2.cells);
-        sort ();
+        if (garbled)
+            sort ();
     }
-
     return true;
-}
-
-inline Box Cubes::bounding_box () const
-{
-    Box box { Dim::Max, Dim::Min };
-    for (Dim d : *this)
-    {
-        box.lo.min (d);
-        box.hi.max (d);
-    }
-    return box;
 }
 
 inline std::string Cubes::ascii (char c) const

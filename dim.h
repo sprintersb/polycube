@@ -143,6 +143,7 @@ struct Dim
             d = Dim { (value_t) -d.v[1], d.v[0] };
         return d;
     }
+#if DIM <= 2
     void min (Dim d)
     {
         for (int i = 0; i < size (); ++i)
@@ -153,6 +154,18 @@ struct Dim
         for (int i = 0; i < size (); ++i)
             v[i] = std::max (v[i], d.v[i]);
     }
+#else
+    void min (Dim d)
+    {
+        const auto c = (int_t) (v < d.v);
+        v = (vector_t) ((ival() & c) | (d.ival() & ~c));
+    }
+    void max (Dim d)
+    {
+        const auto c = (int_t) (v > d.v);
+        v = (vector_t) ((ival() & c) | (d.ival() & ~c));
+    }
+#endif // DIM
     Hasher::type hash () const
     {
         return Hasher() (ival ());
@@ -221,7 +234,7 @@ inline const Dim Dim::Max = Dim::all (INT8_MAX);
 struct Box
 {
     Dim lo, hi;
-    bool contains (Dim d)
+    bool contains (Dim d) const
     {
         for (int i = 0; i < d.size (); ++i)
             if (d.v[i] < lo.v[i] || d.v[i] > hi.v[i])
@@ -239,7 +252,7 @@ struct Box
 
 
 // Iterate over the neighbors of 0.  This means that iteration only depends
-// in DIM and not on the actual location of the producer.
+// on DIM and not on the actual location of the producer.
 class DimIterator
 {
     using Corona0 = std::array<Dim, 2 * DIM>;
@@ -285,7 +298,7 @@ inline std::ostream& operator << (std::ostream &ost, Dim d)
 }
 
 #ifdef CUBES_ARRAY
-// We will be at the brink of memory exhaustion, so we need to  save
+// We will be at the brink of memory exhaustion, so we need to save
 // each possible byte on storage and therefore use a managed std::array.
 // When space and time don't matter, you can still use a std::vector by
 // re-compiling with -DCUBES_VECT.
@@ -308,7 +321,7 @@ public:
     }
     int size () const
     {
-        int sz = (int) (Dim::int_t) a_[CELLS].v;
+        const int sz = (int) a_[CELLS].ival ();
         assert (sz >= 0 && sz <= CELLS);
         return sz;
     }
