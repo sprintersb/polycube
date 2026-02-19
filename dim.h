@@ -12,6 +12,7 @@
 // Own
 #include "hash.h"
 #include "iterator-wrap.h"
+#include "util.h"
 
 // Make CUBES_ARRAY / DimArray the default for performance.
 #if defined CUBES_ARRAY && defined CUBES_VECT
@@ -85,10 +86,34 @@ struct Dim
     // Benefit is that Cubes.cells don't change their order when shifted.
     int cmp (Dim d) const
     {
+        d -= *this;
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__ \
+    && __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+        // Unknown endianess.
         for (int i = 0; i < size (); ++i)
-            if (v[i] != d.v[i])
-                return v[i] - d.v[i];
+            if (d[i])
+                return d[i];
         return 0;
+#else // Known endianess.
+#if DIM == 1
+        return d[0];
+#elif DIM == 2
+        return d[0] ? d[0] : d[1];
+#else // DIM >= 3
+        int_t i = d.ival ();
+        if (i == 0)
+            return 0;
+        // Avoid a loop under the assumption that CTZ / CLZ is fast.
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        const int lsb = count_trailing_zeros (i);
+        i >>= lsb & ~7;
+#else
+        const int lsb = count_leading_zeros (i);
+        i <<= lsb & ~7;
+#endif // Endianess
+        return ((vector_t) i)[0];
+#endif // DIM
+#endif // Endianess
     }
     bool operator == (Dim d) const { return (int_t) v == (int_t) d.v; }
     bool operator != (Dim d) const { return (int_t) v != (int_t) d.v; }
