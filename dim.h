@@ -47,10 +47,10 @@ struct Dim
 #error DIM=?
 #endif
 
-    vector_t v = (vector_t) (int_t) 0;
+    vector_t v = all0;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
     Dim () {}
-    Dim (std::initializer_list<value_t> &&il)
+    Dim (const std::initializer_list<value_t> &il)
     {
         assert (il.size () == 0 || il.size () == DIM);
         v = Dim::all0;
@@ -60,7 +60,7 @@ struct Dim
     }
     Dim (const vector_t &v) : v(v) {}
 
-    static Dim all (int w)
+    static inline Dim all (int w)
     {
         Dim d{};
         for (int i = 0; i < d.size (); ++i)
@@ -83,20 +83,22 @@ struct Dim
     {
         return v[i];
     }
+    static inline vector_t combine (vector_t cond, vector_t v1, vector_t v0)
+    {
+        return (v1 & cond) | (v0 & ~cond);
+    }
     // Shift-invariant comparison, so (int_t) <=> (int_t) won't work.
     // Benefit is that Cubes.cells don't change their order when shifted.
     int cmp (Dim d) const
     {
         d -= *this;
-#if DIM == 1
-        return d[0];
-#elif DIM == 2
+#if DIM == 2
         return d[0] ? d[0] : d[1];
 #elif defined ENDIAN_AGNOSTIC
-        for (int i = 0; i < size (); ++i)
+        for (int i = 0; i < size () - 1; ++i)
             if (d[i])
                 return d[i];
-        return 0;
+        return d[size () - 1];
 #else // Known endianess and DIM >= 3.
         int_t i = d.ival ();
         if (i == 0)
@@ -106,8 +108,8 @@ struct Dim
         const int lsb = count_trailing_zeros (i);
         i >>= lsb & ~7;
 #elif defined ENDIAN_BIG
-        const int lsb = count_leading_zeros (i);
-        i <<= lsb & ~7;
+        const int msb = count_leading_zeros (i);
+        i <<= msb & ~7;
 #else
 #error unknown endianess
 #endif // Little or Big.
@@ -142,27 +144,25 @@ struct Dim
             d = Dim { (value_t) -d.v[1], d.v[0] };
         return d;
     }
-#if DIM <= 2
+#if DIM == 2
     void min (Dim d)
     {
-        for (int i = 0; i < size (); ++i)
-            v[i] = std::min (v[i], d.v[i]);
+        v[0] = std::min (v[0], d.v[0]);
+        v[1] = std::min (v[1], d.v[1]);
     }
     void max (Dim d)
     {
-        for (int i = 0; i < size (); ++i)
-            v[i] = std::max (v[i], d.v[i]);
+        v[0] = std::max (v[0], d.v[0]);
+        v[1] = std::max (v[1], d.v[1]);
     }
 #else
     void min (Dim d)
     {
-        const auto c = (int_t) (v < d.v);
-        v = (vector_t) ((ival() & c) | (d.ival() & ~c));
+        v = Dim::combine (v < d.v, v, d.v);
     }
     void max (Dim d)
     {
-        const auto c = (int_t) (v > d.v);
-        v = (vector_t) ((ival() & c) | (d.ival() & ~c));
+        v = Dim::combine (v > d.v, v, d.v);
     }
 #endif // DIM
     Hasher::type hash () const
@@ -176,13 +176,24 @@ struct Dim
             return d.hash ();
         }
     };
+    int trace () const
+    {
+        int tr = v[0];
+        for (int i = 1; i < size (); ++i)
+            tr += v[i];
+        return tr;
+    }
     // Manhattan
     int abs () const
     {
-        int man = std::abs (v[0]);
-        for (int i = 1; i < size (); ++i)
-            man += std::abs (v[i]);
-        return man;
+#if DIM == 2
+        return std::abs (v[0]) + std::abs (v[1]);
+#elif DIM == 3
+        // Whether this is profitable for 3D depends on the machine.
+        return std::abs (v[0]) + std::abs (v[1]) + std::abs (v[2]);
+#else
+        return Dim (Dim::combine (v < Dim::all0, -v, v)).trace ();
+#endif
     }
     // Manhattan distance
     int dist (Dim r) const
