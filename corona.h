@@ -31,10 +31,10 @@ public:
         return cells.find (d) != cells.end ();
     }
     using const_iterator = IteratorWrap<Cells, Cells::const_iterator, Dim>;
-    const_iterator begin () const { return const_iterator (cells.cbegin ()); }
-    const_iterator end   () const { return const_iterator (cells.cend ()); }
-    const_iterator cbegin () const { return begin (); }
-    const_iterator cend   () const { return end (); }
+    auto begin () const { return const_iterator (cells.cbegin ()); }
+    auto end   () const { return const_iterator (cells.cend ()); }
+    auto cbegin () const { return begin (); }
+    auto cend   () const { return end (); }
     friend std::ostream& operator << (std::ostream&, const Corona&);
 };
 

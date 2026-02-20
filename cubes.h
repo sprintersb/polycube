@@ -263,12 +263,12 @@ public:
         IteratorWrap<container_type, container_type::iterator, Dim&>;
     using const_iterator =
         IteratorWrap<container_type, container_type::const_iterator, Dim>;
-    iterator begin () { return iterator (cells.begin ()); }
-    iterator end ()   { return iterator (cells.end ()); }
-    const_iterator cbegin () const { return const_iterator (cells.cbegin ()); }
-    const_iterator cend () const   { return const_iterator (cells.cend ()); }
-    const_iterator begin () const { return cbegin (); }
-    const_iterator end () const   { return cend (); }
+    auto begin () { return iterator (cells.begin ()); }
+    auto end ()   { return iterator (cells.end ()); }
+    auto cbegin () const { return const_iterator (cells.cbegin ()); }
+    auto cend () const   { return const_iterator (cells.cend ()); }
+    auto begin () const { return cbegin (); }
+    auto end () const   { return cend (); }
 public:
     Box bounding_box () const
     {

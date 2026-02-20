@@ -266,14 +266,13 @@ struct Box
 class DimIterator
 {
     using Corona0 = std::array<Dim, 2 * DIM>;
-    static inline Corona0 get_corona0 ()
+    static inline const Corona0 corona0 = []()
     {
         Corona0 c;
         for (int i = 0; i < 2 * DIM; ++i)
             c[i].v[i / 2] = i % 2 == 0 ? 1 : -1;
         return c;
-    }
-    static inline const Corona0 corona0 = DimIterator::get_corona0 ();
+    } ();
     int pos;
 
     DimIterator (int pos) : pos(pos) {}
@@ -343,12 +342,12 @@ public:
     using iterator       = IteratorWrap<DimArray, Dim*, Dim&>;
     using const_iterator = IteratorWrap<DimArray, const Dim*, Dim>;
 
-    iterator begin () { return iterator (&a_[0]); }
-    iterator end ()   { return iterator (&a_[size ()]); }
-    const_iterator cbegin () const { return const_iterator (&a_[0]); }
-    const_iterator cend ()   const { return const_iterator (&a_[size ()]); }
-    const_iterator begin () const { return cbegin (); }
-    const_iterator end ()   const { return cend (); }
+    auto begin () { return iterator (&a_[0]); }
+    auto end ()   { return iterator (&a_[size ()]); }
+    auto cbegin () const { return const_iterator (&a_[0]); }
+    auto cend ()   const { return const_iterator (&a_[size ()]); }
+    auto begin () const { return cbegin (); }
+    auto end ()   const { return cend (); }
     void insert (const iterator &it, Dim d)
     {
         const int pos = (int) (& (*it) - & a_[0]);
