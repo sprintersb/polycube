@@ -64,11 +64,11 @@ int64_t cube_count_canon (int dim, int n_cells)
             // n = 4: https://oeis.org/A068870
             { 1, 1, 1, 2, 7, 26, 147, 1019, 8699, 82535, 846042, 9078720,
               /* GJL */ 100651853, 1141767844,
-              /* GJL */ 421693622520 /* 32886 min = 32 days, 3 parts */ },
+              /* GJL */ 13177518932 /* 26000 min = 18 days, 3 parts */ },
             // n = 5: ???
             { /* GJL */ 1, 1, 1, 2, 7, 26, 153, 1123, 10708, 119120,
               /*`GJL */ 1493722, 20252600, 290460057,
-              /* GJL */ 4335535057 /* 54790 min = 38 days, 2 parts */ },
+              /* GJL */ 4335535057 /* 44000 min = 31 days, 2 parts */ },
         }
     };
     return ((size_t) dim < cube_counts.size ()
