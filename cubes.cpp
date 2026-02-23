@@ -20,7 +20,7 @@
 #define M5  M4 "8" M4 "9" M4 "8" M4 "9" M4 "8" M4 "8" M4 "7" M4 "7" M4 "7" M4
 
 template<typename T>
-inline T Cubes::congruents (int dim) const
+inline T Cubes::congruents (int dim, bool same_parity) const
 {
     Assert (dim >= 1 && dim <= DIM, "todo: canonicalization in DIM %d", DIM);
     Cubes c (*this);
@@ -41,7 +41,11 @@ inline T Cubes::congruents (int dim) const
         switch (*s - '0')
         {
             default: unreachable ("todo: implement char '%c' (0x%x)", *s, *s);
-            case 0: aspect.insert (c = c.mirrored (0)); break;
+            case 0:
+                if (same_parity)
+                    return aspect.value ();
+                aspect.insert (c = c.mirrored (0));
+                break;
             case 1: aspect.insert (c.rotate (0, 1)); break;
 #if DIM >= 3
             case 2: aspect.insert (c.rotate (0, 2)); break;
@@ -244,11 +248,11 @@ int Cubes::multiplicity () const
     {
         Cubes c (*this);
         Box bbox = c.bounding_box ();
-        const int dim = std::max (1, c.squeeze (bbox));
+        const int dim = std::max (1, c.squeeze (bbox, 0));
         if (dim == DIM - 1 && c.canonicalizable_vertices (dim, symmetry))
             return DIM * (gjl::hyperoctahedral_order (dim) >> !! symmetry);
     }
-    return congruents<int> (DIM);
+    return congruents<int> (DIM, 0);
 }
 
 inline bool Cubes::canonicalizable_vertices (int dim, Symmetry &symmetry) const
@@ -265,7 +269,7 @@ void Cubes::canonicalize ()
             "Cubes diameter %d exceeds DistBase capacity of %zd",
             bbox.hi.dist (bbox.lo), std::tuple_size<DistBase>::value);
     const int dim = DIM >= 3
-        ? std::max (1, squeeze (bbox))
+        ? std::max (1, squeeze (bbox, 0))
         : DIM;
     const bool success = maybe_canonicalize_vertices (bbox, dim);
     if (Cubes::take_stat)
@@ -276,7 +280,7 @@ void Cubes::canonicalize ()
             : gjl::hyperoctahedral_order (dim) + (dim != DIM);
     }
     if (! success)
-        cells = std::move (congruents<Cubes> (dim).cells);
+        cells = std::move (congruents<Cubes> (dim, 0).cells);
 }
 
 // Return optional id of a canonical vertex in [0, 2^DIM).

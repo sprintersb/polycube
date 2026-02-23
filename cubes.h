@@ -210,8 +210,9 @@ public:
         }
         return c;
     }
-    int squeeze (Box &bbox)
+    int squeeze (Box &bbox, bool same_parity)
     {
+        bool parity = 0;
         int l = 0, r = DIM - 1;
         for (bool swapped = false; ; swapped = true)
         {
@@ -219,12 +220,15 @@ public:
             while (l < r && bbox.hi[l] != 0)  ++l;
             if (l >= r)
             {
+                if (same_parity && parity)
+                    flip (1 << 0, bbox);
                 if (swapped)
                     sort ();
                 return 1 + r;
             }
             swap (l, r);
             std::swap (bbox.hi.v[l], bbox.hi.v[r]);
+            parity ^= 1;
         }
     }
     // This is usually not needed since add() adds Dim's in order.
@@ -299,7 +303,7 @@ public:
     }
 private:
     template<typename T>
-    T congruents (int dim) const;
+    T congruents (int dim, bool same_parity) const;
     Vertex canonical_vertex (VertexValues&, const Box&, int, Symmetry&) const;
     bool canonicalizable_vertices (int dim, Symmetry&) const;
     bool maybe_canonicalize_vertices (const Box&, int dim);
