@@ -22,10 +22,10 @@ struct Progress
     bool started = false;
     bool done_p = false;
     using Printer = std::function<void (std::ostringstream&, Progress&, T)>;
-    Printer printer;
+    const Printer *printer;
 
-    Progress (T total, T margin, Printer printer)
-        : total(total), margin(margin), printer(printer)
+    Progress (T total, T margin, const Printer &printer)
+        : total(total), margin(margin), printer(&printer)
     {
         reset ();
     }
@@ -37,12 +37,13 @@ struct Progress
     }
     void update (T t)
     {
-        assert (! done_p && "done't update a done Progress");
+        assert (! done_p && "don't update a done Progress");
         if (! Progress::quiet
             && (! started || t - last_report >= margin))
         {
             std::ostringstream stream;
-            printer (stream, *this, t);
+            if (printer)
+                (*printer) (stream, *this, t);
             erase ();
             len = (int) stream.str().length();
             std::cout << stream.str();
@@ -76,8 +77,8 @@ struct Progress
     static void write (std::ostream &ost, char c, int n)
     {
         if (! Progress::quiet)
-        for (int i = 0; i < n; ++i)
-            ost << c;
+            for (int i = 0; i < n; ++i)
+                ost << c;
     }
     void erase ()
     {

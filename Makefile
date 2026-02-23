@@ -1,7 +1,7 @@
 .PHONY: run all clean
 
 SHELL = /bin/bash
-MODULES := main # cluster diagnostic options
+MODULES := main diagnostic have cubes cubes-border
 
 ###########################################################################
 # http://make.mad-scientist.net/papers/advanced-auto-dependency-generation/
@@ -24,7 +24,11 @@ GXX = g++-14
 
 EXTRA_DEP = Makefile
 
-HOST_FLAGS += -W -Wall -Wno-stringop-overflow -fno-exceptions -save-temps -fverbose-asm -ffunction-sections -O3 -g0 -fopenmp $(FLAGS)
+# Several PRs exist like PR124207 for wrong bounds warnings.
+WARN  = -W -Wall -Wno-stringop-overflow
+DEBUG = -g0
+
+HOST_FLAGS += $(WARN) -O3 $(DEBUG) -fopenmp $(FLAGS)
 
 HOST_CXXFLAGS = -std=c++17 -fno-exceptions $(HOST_FLAGS) $(CXXFLAGS)
 
@@ -44,7 +48,7 @@ run: dorun
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
-.PHONY: progress rotor
+.PHONY: progress rotor alloc
 
 progress:
 	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp $(FLAGS)
@@ -55,8 +59,13 @@ rotor:
 	./rotor.x
 
 canon:
-	g++ test-canonical.cpp -o canon.x -Wall -O3 -fopenmp $(FLAGS)
+	$(GXX) test-canonical.cpp -o canon.x -Wall -O3 -fopenmp $(FLAGS)
 	./canon.x
+
+ALLOC_CPP = test-allocator.cpp diagnostic.cpp
+alloc:
+	$(GXX) $(ALLOC_CPP)  -o alloc.x -Wall -O3 -fopenmp $(FLAGS)
+	./alloc.x
 
 clean:
 	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)

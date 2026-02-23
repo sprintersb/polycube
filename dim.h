@@ -8,12 +8,12 @@
 #include <iterator>
 // C
 #include <cstdint>
-#include <cassert>
 // Own
 #include "hash.h"
 #include "iterator-wrap.h"
 #include "util.h"
 #include "endian.h"
+#include "debug.h"
 
 // Make CUBES_ARRAY / DimArray the default for performance.
 #if defined CUBES_ARRAY && defined CUBES_VECT
@@ -32,16 +32,16 @@ struct Dim
 {
     using value_t = int8_t;
 #if DIM == 2
-    using vector_t = value_t __attribute__((vector_size(2)));
+    using vector_t = [[gnu::vector_size (2)]] value_t;
     using int_t = uint16_t;
 #elif DIM > 2 && DIM <= 4
-    using vector_t = value_t __attribute__((vector_size(4)));
+    using vector_t = [[gnu::vector_size (4)]] value_t;
     using int_t = uint32_t;
 #elif DIM > 4 && DIM <= 8
-    using vector_t = value_t __attribute__((vector_size(8)));
+    using vector_t = [[gnu::vector_size (8)]] value_t;
     using int_t = uint64_t;
 #elif DIM > 8 && DIM <= 16
-    using vector_t = value_t __attribute__((vector_size(16)));
+    using vector_t = [[gnu::vector_size (16)]] value_t;
     using int_t = unsigned __int128;
 #else
 #error DIM=?
@@ -52,7 +52,8 @@ struct Dim
     Dim () {}
     Dim (const std::initializer_list<value_t> &il)
     {
-        assert (il.size () == 0 || il.size () == DIM);
+        Assert (il.size () == 0 || il.size () == DIM,
+                "bad initializer length %zd", il.size ());
         v = Dim::all0;
         int j = 0;
         for (auto i : il)
@@ -105,10 +106,10 @@ struct Dim
             return 0;
         // Avoid a loop under the assumption that CTZ / CLZ is fast.
 #ifdef ENDIAN_LITTLE
-        const int lsb = count_trailing_zeros (i);
+        const int lsb = gjl::count_trailing_zeros (i);
         i >>= lsb & ~7;
 #elif defined ENDIAN_BIG
-        const int msb = count_leading_zeros (i);
+        const int msb = gjl::count_leading_zeros (i);
         i <<= msb & ~7;
 #else
 #error unknown endianess
@@ -216,7 +217,7 @@ struct Dim
             d.set (i, (id & (1 << i)) ? -1 : 1);
         return d;
     }
-    // The distance to the line p0 + <v>, multiplied by DIM.
+    // The distance to the line p0 + <v>, multiplied by DIM = |v|^2.
     int dist (Dim p0, Dim v) const
     {
         const Dim d = *this - p0;
@@ -331,7 +332,7 @@ public:
     int size () const
     {
         const int sz = (int) a_[CELLS].ival ();
-        assert (sz >= 0 && sz <= CELLS);
+        Assert (sz >= 0 && sz <= CELLS, "get bad size %d", sz);
         return sz;
     }
     void clear ()
@@ -351,7 +352,7 @@ public:
     void insert (const iterator &it, Dim d)
     {
         const int pos = (int) (& (*it) - & a_[0]);
-        assert (pos >= 0 && pos <= size ());
+        Assert (pos >= 0 && pos <= size (), "bad insert position %d", pos);
         for (int i = size (); i > pos; --i)
             a_[i] = a_[i - 1];
         a_[pos] = d;
@@ -360,7 +361,7 @@ public:
 private:
     void set_size (int sz)
     {
-        assert (sz >= 0 && sz <= CELLS);
+        Assert (sz >= 0 && sz <= CELLS, "set bad size %d", sz);
         a_[CELLS].v = (Dim::vector_t) (Dim::int_t) sz;
     }
 };
