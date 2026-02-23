@@ -18,7 +18,7 @@
 // Other
 #include <omp.h>
 // Own
-#include "polycube-count.h"
+#include "oeis.h"
 #include "progress.h"
 #include "diagnostic.h"
 #include "debug.h"
@@ -396,8 +396,8 @@ public:
     static int64_t expected_count (int n_cells)
     {
         return PolyCube::canonical_only
-            ? cube_count_canon (DIM, n_cells)
-            : cube_count (DIM, n_cells);
+            ? oeis::cubes_free (DIM, n_cells)
+            : oeis::cubes_fixed (DIM, n_cells);
     }
     // Way 4, 5
     int sprout_way4_5 (Vector &vms, const Filter &filter) const

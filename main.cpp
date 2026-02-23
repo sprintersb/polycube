@@ -10,6 +10,7 @@
 // Own
 #include "cubes-border.h"
 #include "polycube.h"
+#include "oeis.h"
 #include "diagnostic.h"
 #include "is-a-tty.h"
 
@@ -27,8 +28,8 @@ void show_growth_rates ()
     {
         printf ("dim = %d:", dim);
         for (int i = 5; ; ++i)
-            if (auto a = cube_count (dim, i); a > 0)
-                if (auto b = cube_count (dim, i - 1); b > 0)
+            if (auto a = oeis::cubes_fixed (dim, i); a > 0)
+                if (auto b = oeis::cubes_fixed (dim, i - 1); b > 0)
                     printf ("  %.2f", (double) a / b);
                 else break;
             else break;
@@ -40,8 +41,8 @@ void show_growth_rates ()
     {
         printf ("dim = %d:", dim);
         for (int i = 5; ; ++i)
-            if (auto a = cube_count_canon (dim, i); a > 0)
-                if (auto b = cube_count_canon (dim, i - 1); b > 0)
+            if (auto a = oeis::cubes_free (dim, i); a > 0)
+                if (auto b = oeis::cubes_free (dim, i - 1); b > 0)
                     printf ("  %.2f", (double) a / b);
                 else break;
             else break;
@@ -53,8 +54,8 @@ void show_growth_rates ()
     {
         printf ("dim = %d:", dim);
         for (int i = 5; ; ++i)
-            if (auto a = cube_count (dim, i); a > 0)
-                if (auto b = cube_count_canon (dim, i); b > 0)
+            if (auto a = oeis::cubes_fixed (dim, i); a > 0)
+                if (auto b = oeis::cubes_free (dim, i); b > 0)
                     printf ("  %.2f", (double) a / b);
                 else break;
             else break;
@@ -225,8 +226,8 @@ int main_polycube (int argc, char *argv[])
 
         print_stat ();
 
-        if (int ci = cube_count_canon (dim, i); ci >= 0)
-            if (int ci1 = cube_count_canon (dim - 1, i); ci1 >= 0)
+        if (int ci = oeis::cubes_free (dim, i); ci >= 0)
+            if (int ci1 = oeis::cubes_free (dim - 1, i); ci1 >= 0)
                 printf ("free %dd = %.1f%%\n", DIM - 1, 100. * ci1 / ci);
 
         if (want.corona_polynomial)
@@ -271,11 +272,11 @@ int main_polycube (int argc, char *argv[])
         }
 
         if (way != 4 || extra_spice /* corona_margin */ <= 0)
-            if (cube_count (dim, i) >= 0
-                && ccount != cube_count (dim, i))
+            if (oeis::cubes_fixed (dim, i) >= 0
+                && ccount != oeis::cubes_fixed (dim, i))
             {
                 error ("cube count %" PRIi64 " != %" PRIi64 " expected count",
-                       ccount, cube_count (dim, i));
+                       ccount, oeis::cubes_fixed (dim, i));
             }
 
         if (0 && i <= 3 && DIM == 2)
