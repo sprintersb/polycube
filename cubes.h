@@ -74,12 +74,17 @@ public:
     using Vertex = std::optional<int>;
 
     Cubes () {}
-    Cubes (const Cubes *dad, Dim d)
+    Cubes (const std::initializer_list<Dim> &il)
     {
-        if (dad)
-            cells = dad->cells;
+        for (Dim d : il)
+            add (d);
+    }
+    Cubes (const Cubes &dad, Dim d)
+    {
+        cells = dad.cells;
         add (d);
     }
+
     int size () const
     {
         return cells.size ();

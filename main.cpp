@@ -165,7 +165,7 @@ int main_polycube (int argc, char *argv[])
 
         if (i == 1)
         {
-            PolyCube pc1 (nullptr, Dim::all (0));
+            PolyCube pc1 { Dim::all (0) };
             if (way == 4 || way == 5)
             {
                 // Index is hash % n_slots.

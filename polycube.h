@@ -57,7 +57,9 @@ struct PolyCube : Cubes
 
     static inline bool canonical_only;
 
-    PolyCube (const PolyCube *dad, Dim d) : Cubes (dad, d) {}
+    PolyCube (const std::initializer_list<Dim> &il) : Cubes (il) {}
+    PolyCube (const PolyCube &dad, Dim d) : Cubes (dad, d) {}
+    PolyCube (const Cubes &c) : Cubes (c) {}
 
 #pragma omp declare reduction(merge : Set : merge (omp_out, omp_in))    \
     initializer (omp_priv = omp_orig)
@@ -360,7 +362,7 @@ public:
         {
             for (const auto &dad : pcs[i - 1])
                 for (Dim d : dad.corona())
-                    if (PolyCube pc (&dad, d); i < leap)
+                    if (PolyCube pc (dad, d); i < leap)
                         pcs[i].emplace (std::move (pc));
                     else
                     {
@@ -386,7 +388,7 @@ public:
     {
         for (Dim d : corona())
         {
-            PolyCube pc (this, d);
+            PolyCube pc (*this, d);
             if (PolyCube::canonical_only)
                 pc.canonicalize ();
             set.emplace (std::move (pc));
@@ -405,7 +407,7 @@ public:
         int new_count = 0;
         for (Dim d : corona())
         {
-            PolyCube pc (this, d);
+            PolyCube pc (*this, d);
             if (PolyCube::canonical_only)
                 pc.canonicalize ();
             if (filter && ! filter (pc))
