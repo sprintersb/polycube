@@ -89,18 +89,17 @@ public:
     {
         return cells.size ();
     }
-    int cmp (const Cubes &c) const
+    int cmp (const Cubes &r) const
     {
-        auto p2 = c.cells.begin ();
-        auto e2 = c.cells.end ();
+        if (size () != r.size ())
+            return size () - r.size ();
+        auto p2 = r.cells.begin ();
         for (Dim d : cells)
-            if (p2 == e2)
-                return 1;
-            else if (const int i = d.cmp (*p2); i != 0)
+            if (const int i = d.cmp (*p2); i != 0)
                 return i;
             else
                 ++p2;
-        return p2 == e2 ? 0 : -1;
+        return 0;
     }
     bool operator == (const Cubes &r) const
     {
