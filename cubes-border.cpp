@@ -62,7 +62,7 @@ std::string Polygon::svg (bool rel) const
         else if ((d - from)[1] == 0)
             ss << "Hh"[rel] << (d - (rel ? from : O))[0];
         else
-            Unreachable ("line is not vertical / horizontal");
+            unreachable ("line is not vertical / horizontal");
         from = d;
     }
     ss << "Zz"[rel];
@@ -180,7 +180,7 @@ struct BorderFinder
                     if (pool.contains (line))
                         return line;
                 }
-        Unreachable ("no border start found, unaligned Cubes?");
+        unreachable ("no border start found, unaligned Cubes?");
     }
     Polygon get_polygon (bool outer, bool tidy)
     {

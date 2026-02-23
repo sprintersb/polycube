@@ -14,7 +14,7 @@ extern int (*_diagnostic_vfprintf) (FILE*, const char*, va_list);
 
 #ifdef DIAGNOSTIC_NO_FORMAT_CHECK
 [[noreturn]]
-extern void fatal_at (const char *file, int line, const char *fmt, ...);
+extern void fatal_at (const char*, int line, const char*, const char*, ...);
 [[noreturn]]
 extern void error_at (const char *file, int line, const char *fmt, ...);
 extern void warning_at (const char *file, int line, const char *fmt, ...);
@@ -23,8 +23,8 @@ extern void info_at (const char *file, int line, const char *func,
 extern void out_at (const char *file, int line, const char *func,
                     const char *fmt, ...);
 #else
-[[noreturn]] [[gnu::format(__printf__,3,4)]]
-extern void fatal_at (const char *file, int line, const char *fmt, ...);
+[[noreturn]] [[gnu::format(__printf__,4,5)]]
+extern void fatal_at (const char*, int line, const char*, const char*, ...);
 [[noreturn]] [[gnu::format(__printf__,3,4)]]
 extern void error_at (const char *file, int line, const char *fmt, ...);
 [[gnu::format(__printf__,3,4)]]
@@ -44,7 +44,10 @@ extern bool out_context;
     error_at (__FILE__, __LINE__, ##x)
 
 #define fatal(x...) \
-    fatal_at (__FILE__, __LINE__, ##x)
+    fatal_at (__FILE__, __LINE__, "fatal", ##x)
+
+#define unreachable(x...) \
+    fatal_at (__FILE__, __LINE__, "unreachable code", ##x)
 
 #define warning(x...) \
     warning_at (__FILE__, __LINE__, ##x)

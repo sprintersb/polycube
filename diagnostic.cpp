@@ -132,12 +132,12 @@ void error_at (const char *file, int line, const char *fmt, ...)
     std::exit (-2); // Get rid of "noreturn function does return".
 }
 
-void fatal_at (const char *file, int line, const char *fmt, ...)
+void fatal_at (const char *file, int line, const char *tag, const char *fmt,...)
 {
     va_list args;
     va_start (args, fmt);
 
-    diagnostic (x_fatal, "fatal", file, line, fmt, args);
+    diagnostic (x_fatal, tag, file, line, fmt, args);
 
     va_end (args);
 

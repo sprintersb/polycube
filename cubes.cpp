@@ -35,12 +35,12 @@ inline T Cubes::congruents (int dim) const
         case 4: S = M4 "0" M4; break;
         case 5: S = M5 "0" M5; break;
         default:
-            Unreachable ("todo: canonicalize in DIM %d", DIM);
+            unreachable ("todo: canonicalize in DIM %d", DIM);
     }
     for (auto s = S; *s && !aspect.ready(); ++s)
         switch (*s - '0')
         {
-            default: Unreachable ("todo: implement char '%c' (0x%x)", *s, *s);
+            default: unreachable ("todo: implement char '%c' (0x%x)", *s, *s);
             case 0: aspect.insert (c = c.mirrored (0)); break;
             case 1: aspect.insert (c.rotate (0, 1)); break;
 #if DIM >= 3

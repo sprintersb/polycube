@@ -12,6 +12,4 @@
     do {} while (0)
 #endif // DEBUG
 
-#define Unreachable(fmt, x...) fatal ("unreachable code: " fmt, ##x)
-
 #endif // DEBUG_H
