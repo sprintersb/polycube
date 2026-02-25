@@ -2,9 +2,12 @@
 #ifndef OEIS_H
 #define OEIS_H
 
-#include <array>
 #include <vector>
+// C
 #include <cstdint>
+#include <cstring>
+// Own
+#include "diagnostic.h"
 
 namespace oeis
 {
@@ -27,10 +30,11 @@ namespace oeis
             return at (i);
         }
     };
+    using Sequences = std::vector<Sequence>;
 
     inline const Sequence empty;
 
-    inline const std::array<Sequence, 5 + 1> seq_fixed =
+    inline const Sequences seq_fixed =
     {
         empty,
         empty,
@@ -54,7 +58,7 @@ namespace oeis
             227093585071305, 3689707621144614 } },
     };
 
-    inline const std::array<Sequence, 5 + 1> seq_free =
+    inline const Sequences seq_free =
     {
         empty,
         empty,
@@ -79,22 +83,74 @@ namespace oeis
             /* GJL */ 4335535057 /* 44000 min = 31 days, 2 parts */ } },
     };
 
-    inline const Sequence& cubes_fixed (int dim)
+    inline const Sequences seq_symm =
     {
-        return dim < (int) seq_fixed.size () ? seq_fixed[dim] : empty;
-    }
-    inline Sequence::value_type cubes_fixed (int dim, int cells)
+        empty,
+        empty,
+        { "A030227", // n = 2: https://oeis.org/A030227
+          { 1, 1, 1, 2, 3, 6, 10, 20, 34, 70, 121, 250, 441, 912, 1630, 3375,
+            6092, 12624, 22961, 47616, 87136, 180811, 332549, 690398, 1275166,
+            2648422, 4909364, 10199792, 18966700, 39416488, 73497642,
+            152777230, 285569898, 593717419, 1112188817, 2312672439,
+            4340728280, 9027238683, 16973536668, 35303017659 } },
+        { "A007743", // n = 3: https://oeis.org/A007743
+          { 1, 1, 1, 2, 6, 17, 58, 191, 700, 2515, 9623, 36552, 143761, 564443,
+            2259905, 9057278, 36705846, 149046429, 609246350, 2495727647,
+            10267016450, 42322763940, 174974139365 } },
+    };
+
+    inline const Sequences seq_asymm =
     {
-        return cubes_fixed (dim)[cells];
+        empty,
+        empty,
+        { "A030228", // n = 2: https://oeis.org/A030228
+          { 0, 0, 0, 0, 2, 6, 25, 88, 335, 1215, 4534, 16823, 63159, 237679,
+            900341, 3423201, 13073163, 50095285, 192599091, 742576616,
+            2870584814, 11122879867, 43191525139, 168046317330, 654998425237,
+            2557224396342, 9999083912711, 39153000738695, 153511081627903,
+            602621913645490, 2368346964073610, 9317706377210720 } },
+        { "A371397", // n = 3: https://oeis.org/A371397
+          { 0, 0, 0, 0, 1, 6, 54, 416, 3111, 22898, 168460, 1242985, 9227333,
+            68949103, 518618196, 3925228596, 29879207817, 228630283775,
+            1757699977107, 13570824097968, 105182547181534, 818093724437992,
+            6383353614308209 } },
+    };
+
+    inline const Sequences& cubes (const char *name)
+    {
+        if (! strcmp (name, "free"))  return seq_free;
+        if (! strcmp (name, "fixed")) return seq_fixed;
+        if (! strcmp (name, "symm"))  return seq_symm;
+        if (! strcmp (name, "asymm")) return seq_asymm;
+        error ("OEIS cube sequences '%s' not found", name);
     }
 
-    inline const Sequence& cubes_free (int dim)
+    inline const Sequence& cubes (const char *name, int dim)
     {
-        return dim < (int) seq_free.size () ? seq_free[dim] : empty;
+        const Sequences &ss = cubes (name);
+        return dim < (int) ss.size () ? ss[dim] : empty;
+    }
+
+    inline Sequence::value_type cubes (const char *name, int dim, int cells)
+    {
+        return cubes (name, dim)[cells];
+    }
+
+    inline Sequence::value_type cubes_fixed (int dim, int cells)
+    {
+        return cubes ("fixed", dim)[cells];
     }
     inline Sequence::value_type cubes_free (int dim, int cells)
     {
-        return cubes_free (dim)[cells];
+        return cubes ("free", dim)[cells];
+    }
+    inline Sequence::value_type cubes_symm (int dim, int cells)
+    {
+        return cubes ("symm", dim)[cells];
+    }
+    inline Sequence::value_type cubes_asymm (int dim, int cells)
+    {
+        return cubes ("asymm", dim)[cells];
     }
 } // oeis
 #endif // OEIS_H
