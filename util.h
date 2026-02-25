@@ -74,6 +74,15 @@ namespace gjl
     }
 #endif
 
+    template <typename T>
+    constexpr inline int popcount (T t);
+    template<> constexpr inline int popcount (int t) { return __builtin_popcount (t); }
+    template<> constexpr inline int popcount (unsigned t) { return __builtin_popcount (t); }
+    template<> constexpr inline int popcount (long t) { return __builtin_popcountl (t); }
+    template<> constexpr inline int popcount (unsigned long t) { return __builtin_popcountl (t); }
+    template<> constexpr inline int popcount (long long t) { return __builtin_popcountll (t); }
+    template<> constexpr inline int popcount (unsigned long long t) { return __builtin_popcountll (t); }
+
 }; // gjl
 
 #endif // UTIL_H
