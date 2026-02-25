@@ -73,6 +73,8 @@ public:
     // The id of a vertex in [0, 2^DIM).
     using Vertex = std::optional<int>;
 
+    struct Canonics;
+    struct Context;
     Cubes () {}
     Cubes (const std::initializer_list<Dim> &il)
     {
@@ -209,9 +211,8 @@ public:
         }
         return c;
     }
-    int squeeze (Box &bbox, bool same_parity)
+    int squeeze (Box &bbox)
     {
-        bool parity = 0;
         int l = 0, r = DIM - 1;
         for (bool swapped = false; ; swapped = true)
         {
@@ -219,15 +220,12 @@ public:
             while (l < r && bbox.hi[l] != 0)  ++l;
             if (l >= r)
             {
-                if (same_parity && parity)
-                    flip (1 << 0, bbox);
                 if (swapped)
                     sort ();
                 return 1 + r;
             }
             swap (l, r);
             std::swap (bbox.hi.v[l], bbox.hi.v[r]);
-            parity ^= 1;
         }
     }
     // This is usually not needed since add() adds Dim's in order.
@@ -258,6 +256,11 @@ private:
                 if (mask & (1 << b))
                     d.set (b, bbox.hi[b] - d[b]);
     }
+    // !!! This will trash the ordering !!!
+    void flip (int mask)
+    {
+        flip (mask, bounding_box ());
+    }
     // Swap the specified dimensions.  !!! This will trash the ordering !!!
     void swap (int a, int b)
     {
@@ -279,16 +282,9 @@ private:
         }
         return true;
     }
-    template<typename T>
-    struct CongruentsAspect
-    {
-        void insert (const T&);
-        bool ready () const;
-        const T& value () const;
-        T& value ();
-    };
 public:
     void canonicalize ();
+    void canonics (Canonics&) const;
     int multiplicity () const;
     Cubes canonical () const
     {
@@ -302,10 +298,12 @@ public:
     }
 private:
     template<typename T>
+    struct CongruentsAspect {};
+    template<typename T>
     T congruents (int dim, bool same_parity) const;
-    Vertex canonical_vertex (VertexValues&, const Box&, int, Symmetry&) const;
-    bool canonicalizable_vertices (int dim, Symmetry&) const;
-    bool maybe_canonicalize_vertices (const Box&, int dim);
+    bool canonical_vertex (Context&) const;
+    bool maybe_canonicalize_vertices (Context&, bool same_parity = false);
+    void canonicalize_vertices (Context&, bool);
     Symmetry find_symmetry (const DistPointers&, const Box&, int) const;
 public:
     Box bounding_box () const
@@ -329,6 +327,21 @@ public:
     }
     std::string ascii (char c = '*') const;
     friend std::ostream& operator << (std::ostream&, const Cubes&);
+};
+
+struct Cubes::Canonics
+{
+    Cubes c1, c2;
+    bool symmetric = false;
+};
+
+struct Cubes::Context
+{
+    int dim;
+    Box bbox;
+    Vertex vertex;
+    VertexValues vvs;
+    Symmetry symmetry;
 };
 
 #endif // CUBES_H

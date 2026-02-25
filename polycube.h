@@ -277,6 +277,7 @@ struct PolyCube : Cubes
     struct Have
     {
         Flavour fixed { "fixed" }, free { "free" };
+        Flavour symm { "symm" }, asymm { "asymm" };
         //Have
         Flavour& operator () ()
         {

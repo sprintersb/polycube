@@ -245,6 +245,10 @@ inline const Dim Dim::Max = Dim::all (INT8_MAX);
 struct Box
 {
     Dim lo, hi;
+    bool operator == (const Box &r) const
+    {
+        return lo == r.lo && hi == r.hi;
+    }
     bool contains (Dim d) const
     {
         for (int i = 0; i < d.size (); ++i)

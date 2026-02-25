@@ -154,6 +154,31 @@ struct Cubes::CongruentsAspect<Cubes>
     bool ready () const { return false; }
 };
 
+// We are only interested in symmetry and in a canonical congruent
+// of according parity.  If symmetric, then can.c2 is undefined.
+template<>
+struct Cubes::CongruentsAspect<Cubes::Canonics>
+{
+    Canonics can;
+    Cubes c_mirrored;
+    int n_calls = 0;
+    Canonics& value () { return can; }
+    const Canonics& value () const { return can; }
+    void insert (const Cubes &c)
+    {
+        if (n_calls == 0)
+            c_mirrored = c.mirrored (0);
+        if (! can.symmetric)
+            can.symmetric = c == c_mirrored;
+        if (! can.symmetric)
+            if (const Cubes m = c.mirrored (0); n_calls == 0 || m < can.c2)
+                can.c2 = m;
+        if (n_calls == 0 || c < can.c1)
+            can.c1 = c;
+        n_calls += 1;
+    }
+    bool ready () const { return false; }
+};
 
 // We are only interested in the number of congruents.
 template<>
@@ -241,55 +266,101 @@ inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
 
 int Cubes::multiplicity () const
 {
-    Symmetry symmetry;
-    if (canonicalizable_vertices (DIM, symmetry))
-        return gjl::hyperoctahedral_order (DIM) >> !! symmetry;
+    Context ctx;
+    ctx.dim = DIM;
+    ctx.bbox = bounding_box ();
+    if (canonical_vertex (ctx))
+        return gjl::hyperoctahedral_order (DIM) >> !! ctx.symmetry;
     if (DIM >= 3)
     {
         Cubes c (*this);
-        Box bbox = c.bounding_box ();
-        const int dim = std::max (1, c.squeeze (bbox, 0));
-        if (dim == DIM - 1 && c.canonicalizable_vertices (dim, symmetry))
-            return DIM * (gjl::hyperoctahedral_order (dim) >> !! symmetry);
+        ctx.bbox = c.bounding_box ();
+        ctx.dim = std::max (1, c.squeeze (ctx.bbox));
+        if (ctx.dim == DIM - 1 && c.canonical_vertex (ctx))
+            return DIM * (gjl::hyperoctahedral_order (ctx.dim)
+                          >> !! ctx.symmetry);
     }
     return congruents<int> (DIM, 0);
 }
 
-inline bool Cubes::canonicalizable_vertices (int dim, Symmetry &symmetry) const
-{
-    VertexValues vvs;
-    return !! canonical_vertex (vvs, bounding_box (), dim, symmetry);
-}
-
 void Cubes::canonicalize ()
 {
-    Box bbox = bounding_box ();
-    Assert (bbox.lo == Dim::all0, "expecting 0-aligned Cubes");
-    Assert (bbox.hi.dist (bbox.lo) < (int) std::tuple_size<DistBase>::value,
-            "Cubes diameter %d exceeds DistBase capacity of %zd",
-            bbox.hi.dist (bbox.lo), std::tuple_size<DistBase>::value);
-    const int dim = DIM >= 3
-        ? std::max (1, squeeze (bbox, 0))
+    Context ctx;
+    ctx.bbox = bounding_box ();
+    Assert (ctx.bbox.lo == Dim::all0, "expecting 0-aligned Cubes");
+    [[maybe_unused]] const int diag_length = ctx.bbox.hi.dist (ctx.bbox.lo);
+    Assert (diag_length <= MAX_DIAGONAL_LENGTH, "Cubes diameter %d exceeds "
+            "DistBase capacity of %d", diag_length, MAX_DIAGONAL_LENGTH);
+    ctx.dim = DIM >= 3
+        ? std::max (1, squeeze (ctx.bbox))
         : DIM;
-    const bool success = maybe_canonicalize_vertices (bbox, dim);
+    const bool success = maybe_canonicalize_vertices (ctx);
+    if (! success)
+        cells = std::move (congruents<Cubes> (ctx.dim, 0).cells);
+
     if (Cubes::take_stat)
     {
         stat[success] += 1;
         stat[2 + success] += success
-            ? VERTEX_CANONICALIZATION_COST + (dim != DIM)
-            : gjl::hyperoctahedral_order (dim) + (dim != DIM);
+            ? VERTEX_CANONICALIZATION_COST + (ctx.dim != DIM)
+            : gjl::hyperoctahedral_order (ctx.dim) + (ctx.dim != DIM);
     }
-    if (! success)
-        cells = std::move (congruents<Cubes> (dim, 0).cells);
+}
+
+void Cubes::canonics (Canonics &can) const
+{
+    can.c1 = *this;
+    Context ctx;
+    ctx.bbox = bounding_box ();
+    ctx.dim = DIM >= 3
+        ? std::max (1, can.c1.squeeze (ctx.bbox))
+        : DIM;
+    const bool success = can.c1.maybe_canonicalize_vertices (ctx);
+    if (success)
+    {
+        if (ctx.dim < DIM || ctx.symmetry)
+            can.symmetric = true;
+        else
+        {
+            // Reuse vertex values to canonicalize a mirror image of can.c1.
+            can.c2 = can.c1;
+            // can.c2 is only local so that garbling cublis is no issue.
+            can.c2.flip (1 << 0, ctx.bbox = can.c2.bounding_box ());
+            // can.c1 is canonicalized with 0 as the canonical vertex.
+            // Adjust for flip() which did id <-> id ^ 1.
+            *ctx.vertex = 1;
+            for (int i = 0; i < 1 << DIM; i += 2)
+                std::swap (ctx.vvs[i], ctx.vvs[i ^ 1]);
+            can.c2.canonicalize_vertices (ctx, true);
+            can.symmetric = can.c1 == can.c2;
+        }
+    }
+    // When vertex canonicalization fails then go brute force.
+    else if (ctx.dim < DIM)
+    {
+        can.c1 = can.c1.congruents<Cubes> (ctx.dim, 0);
+        can.symmetric = true;
+    }
+    else
+        can = can.c1.congruents<Canonics> (DIM /*sic!*/, 1);
+
+    if (Cubes::take_stat)
+    {
+        stat[success] += 1;
+        stat[2 + success] += success
+            ? VERTEX_CANONICALIZATION_COST + (ctx.dim != DIM)
+            : gjl::hyperoctahedral_order (ctx.dim) + (ctx.dim != DIM);
+    }
 }
 
 // Return optional id of a canonical vertex in [0, 2^DIM).
 // Set optional symmetry to a dimension of mirror symmetry.
-inline auto Cubes::canonical_vertex (VertexValues &vvs, const Box &bbox,
-                                     int dim, Symmetry &symmetry) const
-    -> Vertex
+inline bool Cubes::canonical_vertex (Context &ctx) const
 {
-    symmetry.reset ();
+    const int dim = ctx.dim;
+    Assert (ctx.bbox == bounding_box (), "bad box");
+
+    ctx.symmetry.reset ();
     // For each cubli, record its Man distances to any of the bounding vertices.
     std::array<Dist, 1 << DIM> vdist;
     for (int id = 0; id < 1 << dim; ++id)
@@ -298,7 +369,7 @@ inline auto Cubes::canonical_vertex (VertexValues &vvs, const Box &bbox,
         Dist &vd = vdist[id];
         vd.id = id;
         const Dim diag = Dim::diag (id);
-        const Dim ecke = bbox.vertex (id);
+        const Dim ecke = ctx.bbox.vertex (id);
         for (Dim d : *this)
             // Get the distance to bounding vertex id's cube diagonal.
             // This is better than just adding 1 for a cubli of its distance.
@@ -325,15 +396,15 @@ inline auto Cubes::canonical_vertex (VertexValues &vvs, const Box &bbox,
     const int max_value = pc[(1 << dim) - 1]->value;
     // We are after the vertex -> valuation.  Transfer them from auto to output.
     for (int id = 0; id < 1 << dim; ++id)
-        vvs[id] = vdist[id].value;
+        ctx.vvs[id] = vdist[id].value;
     // Shortcut: When all vertex dists are different, we always succeed.
     if (max_value == (1 << dim) - 1)
         // Canonical: Use the vertex with the smallest valuation.
-        return pc[0]->id;
+        return !! (ctx.vertex = pc[0]->id);
 
-    symmetry = find_symmetry (pc, bbox, dim);
-    if (symmetry)
-        return pc[0]->id;
+    ctx.symmetry = find_symmetry (pc, ctx.bbox, dim);
+    if (ctx.symmetry)
+        return !! (ctx.vertex = pc[0]->id);
 
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
@@ -342,30 +413,38 @@ inline auto Cubes::canonical_vertex (VertexValues &vvs, const Box &bbox,
         bool good = true;
         good &= b == 0              || pc[b]->value > pc[b - 1]->value;
         good &= b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value;
-        if (good && pc[b]->neighbors_uniquely_sortable (vvs, dim))
+        if (good && pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
             // Canonical: The vertex with the smallest unique valuation.
-            return pc[b]->id;
+            return !! (ctx.vertex = pc[b]->id);
     }
-    return {};
+    return !! (ctx.vertex = Vertex {});
 }
 
-inline bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
+inline bool Cubes::maybe_canonicalize_vertices (Context &ctx, bool same_parity)
 {
-    VertexValues vvs;
-    Symmetry symmetry;
-    const Vertex vertex = canonical_vertex (vvs, bbox, dim, symmetry);
-    if (! vertex)
-        return false;
+    if (canonical_vertex (ctx))
+        canonicalize_vertices (ctx, same_parity);
+    return !! ctx.vertex;
+}
+
+inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
+{
+    Assert (!! ctx.vertex, "empty Vertex");
+    Assert (ctx.bbox == bounding_box (), "bad box");
+    const int id = *ctx.vertex;
+    const int dim = ctx.dim;
+    VertexValues &vvs = ctx.vvs;
 
     bool garbled = false;
-    const int id = vertex.value ();
+    bool parity = 0;
     Assert (vvs.size () == 1 << DIM, "a %dd cube has %d vertices, not %zd",
             DIM, 1 << DIM, vvs.size ());
     Cubes p2 (*this);
     // Reflect such that vertex id becomes vertex 0.
     if (id != 0)
     {
-        p2.flip (id, bbox);
+        p2.flip (id, ctx.bbox);
+        parity = gjl::popcount (id);
         garbled = true;
         // Adjust vvs accordingly.
         for (int b = 0; b < 1 << dim; ++b)
@@ -384,13 +463,14 @@ inline bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
         const int lsb = gjl::count_trailing_zeros (todo);
         // Search the vertex with the value as specified by todo in
         // the vertex -> value list. We only have to look for vertex
-        // indices that are a power of 2 (and hence are a neighbors of 0).
+        // indices that are a power of 2 (and hence are neighbors of 0).
         for (int b = 0; b < dim; ++b)
             if (vvs[1 << b] == lsb
                 && b != d)
             {
                 // Make vertex b the next neighbor of vertex 0.
                 p2.swap (d, b);
+                parity ^= 1;
                 garbled = true;
                 // Adjust vvs accordingly.
                 for (int i = 0; i < dim; ++i)
@@ -400,10 +480,18 @@ inline bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
                     if (u > v)
                         std::swap (vvs[u], vvs[v]);
                 }
+                break;
             }
     }
+    if (same_parity && parity)
+    {
+        p2.flip (1 << 0);
+        // Adjust vvs accordingly for future.
+        for (int b = 0; b < 1 << dim; b += 2)
+            std::swap (vvs[b], vvs[b ^ 1]);
+    }
     // Now p2 has canonical cublis, but swapping and flipping
-    // clobbered cells' order.  Re-construct a proper one.
+    // clobbered cublis' order.  Re-construct a proper one.
     if (size () <= SORT_THRESHOLD)
     {
         if (garbled)
@@ -421,7 +509,6 @@ inline bool Cubes::maybe_canonicalize_vertices (const Box &bbox, int dim)
         if (garbled)
             sort ();
     }
-    return true;
 }
 
 
