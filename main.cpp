@@ -63,6 +63,24 @@ void show_growth_rates ()
     }
 }
 
+void check_sequences ()
+{
+    for (int dim = 2; dim <= 3; ++dim)
+    {
+        printf ("== checking dim %d: free = symm + asymm ==\n", dim);
+        auto sf = oeis::cubes ("free", dim);
+        auto ss = oeis::cubes ("symm", dim);
+        auto sa = oeis::cubes ("asymm", dim);
+        for (int i = 0; sf[i] >= 0 && ss[i] >= 0 && sa[i] >= 0; ++i)
+            if (sf[i] != ss[i] + sa[i])
+                error ("i = %d: %" PRIi64 " != %" PRIi64 " + %" PRIi64,
+                       i, sf[i], ss[i], sa[i]);
+            else
+                printf (" %d", i);
+        printf (" ok\n");
+    }
+}
+
 void print_stat ()
 {
     if (!Cubes::take_stat)
@@ -92,6 +110,7 @@ void print_stat ()
 
 int main_polycube (int argc, char *argv[])
 {
+    check_sequences ();
     show_growth_rates ();
 
     int dim = 2;
