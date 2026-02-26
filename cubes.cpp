@@ -154,32 +154,6 @@ struct Cubes::CongruentsAspect<Cubes>
     bool ready () const { return false; }
 };
 
-// We are only interested in symmetry and in a canonical congruent
-// of according parity.  If symmetric, then can.c2 is undefined.
-template<>
-struct Cubes::CongruentsAspect<Cubes::Canonics>
-{
-    Canonics can;
-    Cubes c_mirrored;
-    int n_calls = 0;
-    Canonics& value () { return can; }
-    const Canonics& value () const { return can; }
-    void insert (const Cubes &c)
-    {
-        if (n_calls == 0)
-            c_mirrored = c.mirrored (0);
-        if (! can.symmetric)
-            can.symmetric = c == c_mirrored;
-        if (! can.symmetric)
-            if (const Cubes m = c.mirrored (0); n_calls == 0 || m < can.c2)
-                can.c2 = m;
-        if (n_calls == 0 || c < can.c1)
-            can.c1 = c;
-        n_calls += 1;
-    }
-    bool ready () const { return false; }
-};
-
 // We are only interested in the number of congruents.
 template<>
 struct Cubes::CongruentsAspect<int>
@@ -307,42 +281,33 @@ void Cubes::canonicalize ()
     }
 }
 
-void Cubes::canonics (Canonics &can) const
+// Find a canonical representation, and determine whether it is congruent
+// to some flipped version of itself.
+void Cubes::canonicalize (bool &symmetric)
 {
-    can.c1 = *this;
     Context ctx;
     ctx.bbox = bounding_box ();
     ctx.dim = DIM >= 3
-        ? std::max (1, can.c1.squeeze (ctx.bbox))
+        ? std::max (1, squeeze (ctx.bbox))
         : DIM;
-    const bool success = can.c1.maybe_canonicalize_vertices (ctx);
+    const bool success = maybe_canonicalize_vertices (ctx);
     if (success)
     {
-        if (ctx.dim < DIM || ctx.symmetry)
-            can.symmetric = true;
-        else
-        {
-            // Reuse vertex values to canonicalize a mirror image of can.c1.
-            can.c2 = can.c1;
-            // can.c2 is only local so that garbling cublis is no issue.
-            can.c2.flip (1 << 0, ctx.bbox = can.c2.bounding_box ());
-            // can.c1 is canonicalized with 0 as the canonical vertex.
-            // Adjust for flip() which did id <-> id ^ 1.
-            *ctx.vertex = 1;
-            for (int i = 0; i < 1 << DIM; i += 2)
-                std::swap (ctx.vvs[i], ctx.vvs[i ^ 1]);
-            can.c2.canonicalize_vertices (ctx, true);
-            can.symmetric = can.c1 == can.c2;
-        }
+        symmetric = ctx.dim < DIM || ctx.symmetry || matches_flipped (0);
     }
     // When vertex canonicalization fails then go brute force.
     else if (ctx.dim < DIM)
     {
-        can.c1 = can.c1.congruents<Cubes> (ctx.dim, 0);
-        can.symmetric = true;
+        cells = std::move (congruents<Cubes> (ctx.dim, 0).cells);
+        symmetric = true;
     }
     else
-        can = can.c1.congruents<Canonics> (DIM /*sic!*/, 1);
+    {
+        cells = std::move (congruents<Cubes> (DIM, 1).cells);
+        Cubes &&c2 = mirrored (0).congruents<Cubes> (DIM, 1);
+        if (const int j = cmp (c2); ! (symmetric = j == 0) && j > 0)
+            cells = std::move (c2.cells);
+    }
 
     if (Cubes::take_stat)
     {

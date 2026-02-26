@@ -73,7 +73,6 @@ public:
     // The id of a vertex in [0, 2^DIM).
     using Vertex = std::optional<int>;
 
-    struct Canonics;
     struct Context;
     Cubes () {}
     Cubes (const std::initializer_list<Dim> &il)
@@ -272,11 +271,19 @@ private:
             d.set (b, ia);
         }
     }
+    bool matches_flipped (int dim) const
+    {
+        return matches_flipped (dim, max_coord (dim));
+    }
     bool matches_flipped (int dim, const Box &bbox) const
+    {
+        return matches_flipped (dim, bbox.hi[dim]);
+    }
+    bool matches_flipped (int dim, int hi_dim) const
     {
         for (Dim d : *this)
         {
-            d.set (dim, bbox.hi[dim] - d[dim]);
+            d.set (dim, hi_dim - d[dim]);
             if (! contains (d))
                 return false;
         }
@@ -284,7 +291,7 @@ private:
     }
 public:
     void canonicalize ();
-    void canonics (Canonics&) const;
+    void canonicalize (bool &symmetric);
     int multiplicity () const;
     Cubes canonical () const
     {
@@ -327,12 +334,6 @@ public:
     }
     std::string ascii (char c = '*') const;
     friend std::ostream& operator << (std::ostream&, const Cubes&);
-};
-
-struct Cubes::Canonics
-{
-    Cubes c1, c2;
-    bool symmetric = false;
 };
 
 struct Cubes::Context
