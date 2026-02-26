@@ -3,6 +3,7 @@
 #define DEBUG_H
 
 #include "diagnostic.h"
+#include "config-debug.h" // auto-generated
 
 #ifdef DEBUG
 #define Assert(cond, fmt, x...)                                         \

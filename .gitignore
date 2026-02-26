@@ -2,6 +2,7 @@
 *.obj
 *.ii
 *.x
+config-*.h
 dorun
 
 *.png

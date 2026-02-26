@@ -2,6 +2,11 @@
 #ifndef DIM_H
 #define DIM_H
 
+#include "config-dim.h" // auto-generated
+#ifndef DIM
+#error DIM is not defined
+#endif
+
 #include <algorithm> // std::min
 #include <iostream>
 #include <array>

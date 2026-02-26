@@ -113,18 +113,17 @@ int main_polycube (int argc, char *argv[])
     check_sequences ();
     show_growth_rates ();
 
-    int dim = 2;
+    const int dim = DIM;
     int level = 10;
     int way = 0;
     int extra_spice = 0;
     int leap = 1;
     Cubes::take_stat = false;
 
-    if (argc > 1)   sscanf (argv[1], "%i", &dim);
-    if (argc > 2)   sscanf (argv[2], "%i", &level);
-    if (argc > 3)   sscanf (argv[3], "%i", &way);
-    if (argc > 4)   sscanf (argv[4], "%i", &extra_spice);
-    if (argc > 5)   sscanf (argv[5], "%i", &leap);
+    if (argc > 1)   sscanf (argv[1], "%i", &level);
+    if (argc > 2)   sscanf (argv[2], "%i", &way);
+    if (argc > 3)   sscanf (argv[3], "%i", &extra_spice);
+    if (argc > 4)   sscanf (argv[4], "%i", &leap);
 
     PolyCube::canonical_only = Cubes::can_canonicalize;
 
@@ -135,7 +134,6 @@ int main_polycube (int argc, char *argv[])
 #endif
 
     assert (way == 0 || way == 4 || way == 5);
-    assert (dim == DIM);
 #ifdef CUBES_ARRAY
     assert (level <= CELLS);
 #endif
