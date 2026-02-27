@@ -13,6 +13,7 @@
 #include <iterator>
 // C
 #include <cstdint>
+#include <cstring>
 // Own
 #include "hash.h"
 #include "iterator-wrap.h"
@@ -362,9 +363,13 @@ public:
     {
         const int pos = (int) (& (*it) - & a_[0]);
         Assert (pos >= 0 && pos <= size (), "bad insert position %d", pos);
-        for (int i = size (); i > pos; --i)
-            a_[i] = a_[i - 1];
-        a_[pos] = d;
+        const auto n_bytes = (const uint8_t*) &*end() - (const uint8_t*) &*it;
+        if (n_bytes < 16)
+            for (int i = size (); i > pos; --i)
+                a_[i] = a_[i - 1];
+        else
+            std::memmove (&*(it + 1), &*it, n_bytes);
+        *it = d;
         set_size (1 + size ());
     }
 private:
