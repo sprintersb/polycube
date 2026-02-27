@@ -18,6 +18,8 @@
 #define M3  M2 "2" M2 "3" M2 "3" M2 "4" M2 "2" M2
 #define M4  M3 "5" M3 "5" M3 "6" M3 "5" M3 "6" M3 "5" M3 "5" M3
 #define M5  M4 "8" M4 "9" M4 "8" M4 "9" M4 "8" M4 "8" M4 "7" M4 "7" M4 "7" M4
+#define M6  M5 "A" M5 "A" M5 "A" M5 "B" M5 "B" M5 "C" M5 "B" M5 "B" \
+            M5 "A" M5 "A" M5 "A" M5
 
 template<typename T>
 inline T Cubes::congruents (int dim, bool same_parity) const
@@ -34,32 +36,38 @@ inline T Cubes::congruents (int dim, bool same_parity) const
         case 3: S = M3 "0" M3; break;
         case 4: S = M4 "0" M4; break;
         case 5: S = M5 "0" M5; break;
+        case 6: S = M6 "0" M6; break;
         default:
             unreachable ("todo: canonicalize in DIM %d", DIM);
     }
     for (auto s = S; *s && !aspect.ready(); ++s)
-        switch (*s - '0')
+        switch (*s)
         {
             default: unreachable ("todo: implement char '%c' (0x%x)", *s, *s);
-            case 0:
+            case '0':
                 if (same_parity)
                     return aspect.value ();
                 aspect.insert (c = c.mirrored (0));
                 break;
-            case 1: aspect.insert (c.rotate (0, 1)); break;
+            case '1': aspect.insert (c.rotate (0, 1)); break;
 #if DIM >= 3
-            case 2: aspect.insert (c.rotate (0, 2)); break;
-            case 3: aspect.insert (c.rotate (1, 2)); break;
-            case 4: aspect.insert (c.rotate (2, 1)); break;
+            case '2': aspect.insert (c.rotate (0, 2)); break;
+            case '3': aspect.insert (c.rotate (1, 2)); break;
+            case '4': aspect.insert (c.rotate (2, 1)); break;
 #endif
 #if DIM >= 4
-            case 5: aspect.insert (c.rotate (3, 0)); break;
-            case 6: aspect.insert (c.rotate (3, 1)); break;
+            case '5': aspect.insert (c.rotate (3, 0)); break;
+            case '6': aspect.insert (c.rotate (3, 1)); break;
 #endif
 #if DIM >= 5
-            case 7: aspect.insert (c.rotate (4, 0)); break;
-            case 8: aspect.insert (c.rotate (4, 1)); break;
-            case 9: aspect.insert (c.rotate (3, 4)); break;
+            case '7': aspect.insert (c.rotate (4, 0)); break;
+            case '8': aspect.insert (c.rotate (4, 1)); break;
+            case '9': aspect.insert (c.rotate (3, 4)); break;
+#endif
+#if DIM >= 6
+            case 'A': aspect.insert (c.rotate (5, 0)); break;
+            case 'B': aspect.insert (c.rotate (5, 2)); break;
+            case 'C': aspect.insert (c.rotate (3, 5)); break;
 #endif
         } // switch
     return aspect.value ();
@@ -107,9 +115,11 @@ struct Dist : DistBase
     }
     bool neighbors_uniquely_sortable (const VertexValues &vvs, int dim) const
     {
-        unsigned bits = 0;
+        if (DIM >= 7)
+            unreachable ("todo: DIM >= 7");
+        uint64_t bits = 0;
         for (int j = 0; j < dim; ++j)
-            if (const unsigned mask = 1u << vvs[id ^ (1 << j)]; bits & mask)
+            if (uint64_t mask = (uint64_t) 1 << vvs[id ^ (1 << j)]; bits & mask)
                 return false;
             else
                 bits |= mask;
@@ -181,11 +191,11 @@ private:
         Assert (sz <= 1 + hoho / 2, "we need at most 1 + hoho/2 elements");
         size_ = sz;
     }
-    // As it seems, even in dimension 5 with hoho = 3840, a managed
+    // As it seems, even in dimension 4 with hoho = 384, a managed
     // std::array beats std::unordered_set (and std::set).  Reasons are
     // that std::array lives on the stack and doesn't require expensive
     // heap memory, and it neither requires hashes nor Cubes < Cubes.
-#if DIM <= 5
+#if DIM <= 4
     std::array<Cubes, 1 + hoho / 2> cubs;
     void do_insert (const Cubes &c)
     {
@@ -196,7 +206,6 @@ private:
         cubs[size_ - 1] = c;
     }
 #else
-#warning profile this before using
     struct Hash
     {
         Hasher32::type operator () (const Cubes &c) const

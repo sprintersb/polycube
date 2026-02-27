@@ -24,9 +24,9 @@ static void sync_stdio ()
 void show_growth_rates ()
 {
     printf ("Fixed cubes growth rates\n");
-    for (int dim = 2; dim <= 5; ++dim)
+    for (int dim = 2; dim <= 6; ++dim)
     {
-        printf ("dim = %d:", dim);
+        printf ("dim %d:", dim);
         for (int i = 5; ; ++i)
             if (auto a = oeis::cubes_fixed (dim, i); a > 0)
                 if (auto b = oeis::cubes_fixed (dim, i - 1); b > 0)
@@ -39,7 +39,7 @@ void show_growth_rates ()
     printf ("Free cubes growth rates\n");
     for (int dim = 2; dim <= 5; ++dim)
     {
-        printf ("dim = %d:", dim);
+        printf ("dim %d:", dim);
         for (int i = 5; ; ++i)
             if (auto a = oeis::cubes_free (dim, i); a > 0)
                 if (auto b = oeis::cubes_free (dim, i - 1); b > 0)
@@ -52,14 +52,14 @@ void show_growth_rates ()
     printf ("Fixed cubes / free cubes ratio\n");
     for (int dim = 2; dim <= 5; ++dim)
     {
-        printf ("dim = %d:", dim);
+        printf ("dim %d:", dim);
         for (int i = 5; ; ++i)
             if (auto a = oeis::cubes_fixed (dim, i); a > 0)
                 if (auto b = oeis::cubes_free (dim, i); b > 0)
                     printf ("  %.2f", (double) a / b);
                 else break;
             else break;
-        printf ("\n");
+        printf (" -> %d\n", gjl::hyperoctahedral_order (dim));
     }
 }
 

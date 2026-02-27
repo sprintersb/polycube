@@ -71,7 +71,7 @@ private:
     container_type cells;
 
 public:
-    static constexpr bool can_canonicalize = 2 <= DIM && DIM <= 5;
+    static constexpr bool can_canonicalize = 2 <= DIM && DIM <= 6;
     static inline bool take_stat;
     // Mirror symmetry along the specified dimension.
     using Symmetry = std::optional<int>;
