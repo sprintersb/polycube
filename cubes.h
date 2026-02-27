@@ -36,6 +36,12 @@
 #define SORT_THRESHOLD 14
 #endif
 
+// For sizes from BINARY_ADD_THRESHOLD on the insert position is determined
+// by a binary search.  For sizes below a linear search is used.
+#ifndef BINARY_ADD_THRESHOLD
+#define BINARY_ADD_THRESHOLD 10
+#endif
+
 // The relative cost of a vertex canonicalization compared to one
 // step of traversing the hyperoctahedral group.  For stats only.
 #define VERTEX_CANONICALIZATION_COST 4
@@ -134,7 +140,7 @@ public:
                 break;
         return false;
     }
-    void add (Dim d)
+    void add_search_linear (Dim d)
     {
         for (auto it = cells.begin (); ; ++it)
             if (int i; it == cells.end () || (i = d.cmp (*it)) < 0)
@@ -142,8 +148,30 @@ public:
                 cells.insert (it, d);
                 break;
             }
-            else if (i == 0)
+            else
                 Assert (i != 0, "assume we always increase cells");
+    }
+    void add_search_binary (Dim d)
+    {
+        int l = 0;
+        for (int r = size (); r - l >= 1; )
+        {
+            const int m = (l + r) >> 1;
+            if (const int i = d.cmp (cells[m]); i > 0)
+                l = m + 1;
+            else if (i < 0)
+                r = m;
+            else
+                Assert (i != 0, "assume we always increase cells");
+        }
+        cells.insert (cells.begin() + l, d);
+    }
+    void add (Dim d)
+    {
+        if (size () >= BINARY_ADD_THRESHOLD)
+            add_search_binary (d);
+        else
+            add_search_linear (d);
         // Normalize again.  Max one component of d is negative.
         for (int j = 0; j < d.size (); ++j)
             if (d.v[j] < 0)
