@@ -4,6 +4,8 @@
 *.x
 config-*.h
 dorun
+dorun.svg
+gmon.out
 
 *.png
 *.ppm

@@ -110,12 +110,12 @@ run: dorun
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
-dorun.png: gmon.out Makefile
+dorun.svg: gmon.out Makefile
 	@if [ ! -f gmon.out ]; then \
 		echo "error: compile with -pg and run dorun to get gmon.out"; \
 		exit 1; \
 	fi
-	gprof dorun | gprof2dot --wrap | dot -Tpng > $@
+	gprof dorun | gprof2dot --wrap | dot -Tsvg > $@
 
 .PHONY: progress rotor alloc
 
@@ -141,7 +141,7 @@ clean:
 	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)
 	rm -f -- $(wildcard *.lst *.lss *.out *.map *ltrans* *.res *.wpa.*)
 	rm -f -- $(wildcard config-*.h config-*.h.in)
-	rm -rf -- $(wildcard .deps)
+	rm -rf -- $(wildcard .deps dorun.svg gmon.out)
 
 demo.x: demo.cpp Makefile
 	g++ -Wall -O3 -g2 -std=c++11 $< -o $@ -fopenmp
