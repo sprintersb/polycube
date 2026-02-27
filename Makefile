@@ -110,24 +110,32 @@ run: dorun
 #	convert out-1.ppm out-1.png
 #	convert out-2.ppm out-2.png
 
+dorun.png: gmon.out Makefile
+	@if [ ! -f gmon.out ]; then \
+		echo "error: compile with -pg and run dorun to get gmon.out"; \
+		exit 1; \
+	fi
+	gprof dorun | gprof2dot --wrap | dot -Tpng > $@
+
 .PHONY: progress rotor alloc
 
 progress:
 	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp $(FLAGS)
 	./prog.x
 
-rotor:
-	g++ test-rotation.cpp -o rotor.x -Wall -O3 -fopenmp $(FLAGS)
-	./rotor.x
+rotor: config-dim.h
+rotor: cubes.obj diagnostic.cpp
+	g++ test-rotation.cpp $^ -o rotor.x -Wall -O3 -fopenmp $(FLAGS)
+	./rotor.x | tee out
 
 canon:
 	$(GXX) test-canonical.cpp -o canon.x -Wall -O3 -fopenmp $(FLAGS)
 	./canon.x
 
-ALLOC_CPP = test-allocator.cpp diagnostic.cpp
-alloc:
-	$(GXX) $(ALLOC_CPP)  -o alloc.x -Wall -O3 -fopenmp $(FLAGS)
-	./alloc.x
+insert: config-dim.h
+insert: cubes.obj diagnostic.cpp
+	g++ test-insert.cpp $^ -o insert.x -Wall -O3 -fopenmp $(FLAGS)
+	./insert.x
 
 clean:
 	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)
