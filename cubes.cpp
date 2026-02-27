@@ -335,7 +335,7 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     Assert (ctx.bbox == bounding_box (), "bad box");
 
     ctx.symmetry.reset ();
-    // For each cubli, record its Man distances to any of the bounding vertices.
+    // For each cubli, record its distances to any of the bounding vertices.
     std::array<Dist, 1 << DIM> vdist;
     for (int id = 0; id < 1 << dim; ++id)
     {
@@ -374,11 +374,11 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     // Shortcut: When all vertex dists are different, we always succeed.
     if (max_value == (1 << dim) - 1)
         // Canonical: Use the vertex with the smallest valuation.
-        return !! (ctx.vertex = pc[0]->id);
+        return ctx.vertex = pc[0]->id, true;
 
     ctx.symmetry = find_symmetry (pc, ctx.bbox, dim);
     if (ctx.symmetry)
-        return !! (ctx.vertex = pc[0]->id);
+        return ctx.vertex = pc[0]->id, true;
 
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
@@ -389,9 +389,9 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
         good &= b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value;
         if (good && pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
             // Canonical: The vertex with the smallest unique valuation.
-            return !! (ctx.vertex = pc[b]->id);
+            return ctx.vertex = pc[b]->id, true;
     }
-    return !! (ctx.vertex = Vertex {});
+    return ctx.vertex = Vertex {}, false;
 }
 
 inline bool Cubes::maybe_canonicalize_vertices (Context &ctx, bool same_parity)
