@@ -154,7 +154,7 @@ public:
     void add_search_binary (Dim d)
     {
         int l = 0;
-        for (int r = size (); r - l >= 1; )
+        for (int r = size (); r > l; )
         {
             const int m = (l + r) >> 1;
             if (const int i = d.cmp (cells[m]); i > 0)
