@@ -2,6 +2,7 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+#include <cassert>
 #include "diagnostic.h"
 #include "config-debug.h" // auto-generated
 
