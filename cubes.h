@@ -30,10 +30,10 @@
 #endif
 #endif // MAX_DIAGONAL_LENGTH
 
-// For sizes up to SORT_THRESHOLD we sort by re-building the cells.
-// For values above we use std::sort on garbled cells.
+// For sizes from SORT_THRESHOLD on, garbled cells are sorted with std::sort.
+// For sizes below, sorting is achieved by re-building the cells.
 #ifndef SORT_THRESHOLD
-#define SORT_THRESHOLD 14
+#define SORT_THRESHOLD 11
 #endif
 
 // For sizes from BINARY_ADD_THRESHOLD on the insert position is determined
@@ -203,7 +203,7 @@ public:
     Cubes& rotate (int i, int j)
     {
         const int xm = max_coord (i);
-        if (size () <= SORT_THRESHOLD)
+        if (size () < SORT_THRESHOLD)
         {
             Cubes c;
             for (Dim d : cells)

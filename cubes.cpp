@@ -457,7 +457,7 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
     }
     // Now p2 has canonical cublis, but swapping and flipping
     // clobbered cublis' order.  Re-construct a proper one.
-    if (size () <= SORT_THRESHOLD)
+    if (size () < SORT_THRESHOLD)
     {
         if (garbled)
         {
