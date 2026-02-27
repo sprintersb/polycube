@@ -37,7 +37,7 @@ void show_growth_rates ()
     }
 
     printf ("Free cubes growth rates\n");
-    for (int dim = 2; dim <= 5; ++dim)
+    for (int dim = 2; dim <= 6; ++dim)
     {
         printf ("dim %d:", dim);
         for (int i = 5; ; ++i)
@@ -50,7 +50,7 @@ void show_growth_rates ()
     }
 
     printf ("Fixed cubes / free cubes ratio\n");
-    for (int dim = 2; dim <= 5; ++dim)
+    for (int dim = 2; dim <= 6; ++dim)
     {
         printf ("dim %d:", dim);
         for (int i = 5; ; ++i)
