@@ -247,7 +247,7 @@ inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
     return matches_flipped (d, bbox) ? d : none;
 }
 
-int Cubes::multiplicity () const
+int Cubes::multiplicity (bool symmetric) const
 {
     Context ctx;
     ctx.dim = DIM;
@@ -262,8 +262,11 @@ int Cubes::multiplicity () const
         if (ctx.dim == DIM - 1 && c.canonical_vertex (ctx))
             return DIM * (gjl::hyperoctahedral_order (ctx.dim)
                           >> !! ctx.symmetry);
+        if (ctx.dim < DIM)
+            symmetric = true;
     }
-    return congruents<int> (DIM, 0);
+    // Known mirror symmetry improves speed.
+    return congruents<int> (DIM, symmetric);
 }
 
 void Cubes::canonicalize ()

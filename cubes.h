@@ -320,7 +320,7 @@ private:
 public:
     void canonicalize ();
     void canonicalize (bool &symmetric);
-    int multiplicity () const;
+    int multiplicity (bool symmetric = false) const;
     Cubes canonical () const
     {
         Cubes c (*this);
