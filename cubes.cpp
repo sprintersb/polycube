@@ -305,7 +305,7 @@ void Cubes::canonicalize (bool &symmetric)
     const bool success = maybe_canonicalize_vertices (ctx);
     if (success)
     {
-        symmetric = ctx.dim < DIM || ctx.symmetry || matches_flipped (0);
+        symmetric = ctx.dim < DIM || ctx.symmetry;
     }
     // When vertex canonicalization fails then go brute force.
     else if (ctx.dim < DIM)
