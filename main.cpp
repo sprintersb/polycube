@@ -115,7 +115,7 @@ int main_polycube (int argc, char *argv[])
 
     const int dim = DIM;
     int level = 10;
-    int way = 0;
+    int way = 4;
     int extra_spice = 0;
     int leap = 1;
     Cubes::take_stat = false;
@@ -133,7 +133,7 @@ int main_polycube (int argc, char *argv[])
     std::cout << "CUBES_VECT DIM=" << DIM << "\n";
 #endif
 
-    assert (way == 0 || way == 4 || way == 5);
+    assert (way == 4 || way == 5);
 #ifdef CUBES_ARRAY
     assert (level <= CELLS);
 #endif
@@ -141,6 +141,7 @@ int main_polycube (int argc, char *argv[])
     const int max_threads = omp_get_max_threads ();
     std::cout << "Max threads: " << max_threads << "\n";
 
+    auto &want = PolyCube::want;
     // See birthday paradox.
     const double p_slot_collide = 0.2;
     const int n_slots
@@ -154,7 +155,6 @@ int main_polycube (int argc, char *argv[])
 
     std::vector<PolyCube::Have> have (1 + level);
 
-    auto &want = PolyCube::want;
     want.free.cubes = Cubes::can_canonicalize;
     want.free.count = Cubes::can_canonicalize;
     want.fixed.cubes = ! Cubes::can_canonicalize;
@@ -182,19 +182,10 @@ int main_polycube (int argc, char *argv[])
 
         if (i == 1)
         {
-            PolyCube pc1 { Dim::all (0) };
-            if (way == 4 || way == 5)
-            {
-                // Index is hash % n_slots.
-                PolyCube::Vector v (n_slots);
-                have[i]().vec.swap (v);
-                have[i]().vec[pc1.hash () % n_slots].set.emplace (pc1);
-                if (way == 5)
-                    poly = PolyCube::Poly (have[i]().vec);
-            }
-            else
-                have[i]().set.emplace (pc1);
-            have[i]().count = 1;
+            PolyCube pc1 { Dim::all0 };
+            have[1].init (pc1, n_slots);
+            if (way == 5 && want.corona_polynomial)
+                poly = PolyCube::Poly (have[i]);
             have[i].smallest_corona = pc1;
         }
         else
@@ -215,9 +206,8 @@ int main_polycube (int argc, char *argv[])
                     {
                         return ! pc.has_large_corona (max_corona);
                     };
-                have[i]().count = PolyCube::sprout_way4 (n_slots, progress_at,
-                                                         have[i], have[i - 1],
-                                                         filter, nullptr);
+                have[i - 1].sprout_way4 (n_slots, progress_at, have[i],
+                                         filter, nullptr);
             }
             else if (way == 5)
             {
@@ -226,19 +216,15 @@ int main_polycube (int argc, char *argv[])
                     want.free.cubes = want.fixed.cubes = false;
                 const auto &hin = have[want.leap ? i - want.leap : i - 1];
                 if (i <= level - leap || i == level)
-                    PolyCube::sprout_way5 (n_slots, progress_at, have[i], hin);
+                    hin.sprout_way5 (n_slots, progress_at, have[i]);
                 else
                 {
                     std::cout << "leaped\n";
                     continue;
                 }
             }
-            else if (way == 0)
-            {
-                for (const auto &pc : have[i - 1]().set)
-                    pc.add_sprouts (have[i]().set);
-                have[i]().count = have[i]().set.size ();
-            }
+            else
+                unreachable ("unknown way %d", way);
         }
 
         print_stat ();
@@ -250,9 +236,7 @@ int main_polycube (int argc, char *argv[])
         if (want.corona_polynomial)
         {
             if (way == 4)
-                poly = PolyCube::Poly (have[i]().vec);
-            else if (way == 0)
-                poly = PolyCube::Poly (have[i]().set);
+                poly = PolyCube::Poly (have[i]);
         }
 
         int64_t ccount = have[i].get_fixed_count ();
@@ -278,7 +262,7 @@ int main_polycube (int argc, char *argv[])
 
         if (way == 4 && extra_spice > 0)
         {
-            auto small_corona = PolyCube::find_min_corona (have[i]().vec);
+            auto small_corona = PolyCube::find_min_corona (have[i]);
             if (! small_corona.empty ())
             {
                 const auto &best = * small_corona.begin();
@@ -297,16 +281,17 @@ int main_polycube (int argc, char *argv[])
             }
 
         if (0 && i <= 3 && DIM == 2)
-            for (const auto &ms: have[i]().vec)
-                for (const auto &pc : ms.set)
-                {
-                    auto &&ps = cubes_border (pc);
-                    for (const auto &pgon : ps)
+            for (auto f : have[i].v ())
+                for (const auto &ms: f->vec)
+                    for (const auto &pc : ms.set)
                     {
-                        std::cout << pgon;
-                        std::cout << pc.ascii ();
+                        auto &&ps = cubes_border (pc);
+                        for (const auto &pgon : ps)
+                        {
+                            std::cout << pgon;
+                            std::cout << pc.ascii ();
+                        }
                     }
-                }
     }
     exit (0); // Faster than waiting for all them destructors.
 }

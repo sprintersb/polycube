@@ -29,7 +29,7 @@ help:
 	@exit 0
 
 SHELL = /bin/bash
-MODULES := main diagnostic have cubes cubes-border
+MODULES := main diagnostic polycube cubes cubes-border
 
 ###########################################################################
 # http://make.mad-scientist.net/papers/advanced-auto-dependency-generation/
