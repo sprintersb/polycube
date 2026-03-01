@@ -225,43 +225,43 @@ private:
 #endif
 };
 
-// Return the dimension number when there is respective simple mirror symmetry.
 inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
                                   int dim) const -> Symmetry
 {
-    const Symmetry none; // Just returning {} may raise a GCC warning.
     const int max_value = pc[(1 << dim) - 1]->value;
     if (max_value != (1 << (dim - 1)) - 1)
-        return none;
+        return 0;
     // # valuations are exacly half of HOh's symmetries, which is a
     // hallmark for mirror symmetry.
     const int symmetry = pc[0]->id ^ pc[1]->id;
     // For now, only consider simple reflections, i.e. symmetry has popcount 1.
     if (symmetry & (symmetry - 1))
-        return none;
+        return 0;
     for (int i = 2; i < 1 << dim; i += 2)
         if ((pc[i]->id ^ pc[i + 1]->id) != symmetry)
-            return none;
+            return 0;
     // All looks good until now, but we need a final proof.
     const int d = gjl::count_trailing_zeros (symmetry);
-    return matches_flipped (d, bbox) ? d : none;
+    return matches_flipped (d, bbox) ? 2 : 0;
 }
 
-int Cubes::multiplicity (bool symmetric) const
+int Cubes::multiplicity (Symmetry symmetry) const
 {
+    if (symmetry == 1)
+        return gjl::hyperoctahedral_order (DIM);
+    bool symmetric = symmetry == 2;
     Context ctx;
     ctx.dim = DIM;
     ctx.bbox = bounding_box ();
     if (canonical_vertex (ctx))
-        return gjl::hyperoctahedral_order (DIM) >> !! ctx.symmetry;
+        return gjl::hyperoctahedral_order (DIM) / ctx.symmetry;
     if (DIM >= 3)
     {
         Cubes c (*this);
         ctx.bbox = c.bounding_box ();
         ctx.dim = std::max (1, c.squeeze (ctx.bbox));
         if (ctx.dim == DIM - 1 && c.canonical_vertex (ctx))
-            return DIM * (gjl::hyperoctahedral_order (ctx.dim)
-                          >> !! ctx.symmetry);
+            return DIM * (gjl::hyperoctahedral_order (ctx.dim) / ctx.symmetry);
         if (ctx.dim < DIM)
             symmetric = true;
     }
@@ -295,7 +295,7 @@ void Cubes::canonicalize ()
 
 // Find a canonical representation, and determine whether it is congruent
 // to some flipped version of itself.
-void Cubes::canonicalize (bool &symmetric)
+void Cubes::canonicalize (Symmetry &symmetry)
 {
     Context ctx;
     ctx.bbox = bounding_box ();
@@ -305,19 +305,21 @@ void Cubes::canonicalize (bool &symmetric)
     const bool success = maybe_canonicalize_vertices (ctx);
     if (success)
     {
-        symmetric = ctx.dim < DIM || ctx.symmetry;
+        symmetry = ctx.dim < DIM || ctx.symmetry == 2 ? 2 : 1;
     }
     // When vertex canonicalization fails then go brute force.
     else if (ctx.dim < DIM)
     {
         cells = std::move (congruents<Cubes> (ctx.dim, 0).cells);
-        symmetric = true;
+        symmetry = 2;
     }
     else
     {
         cells = std::move (congruents<Cubes> (DIM, 1).cells);
         Cubes &&c2 = mirrored (0).congruents<Cubes> (DIM, 1);
-        if (const int j = cmp (c2); ! (symmetric = j == 0) && j > 0)
+        const int j = cmp (c2);
+        symmetry = j == 0 ? 2 : 0;
+        if (j > 0)
             cells = std::move (c2.cells);
     }
 
@@ -337,7 +339,6 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     const int dim = ctx.dim;
     Assert (ctx.bbox == bounding_box (), "bad box");
 
-    ctx.symmetry.reset ();
     // For each cubli, record its distances to any of the bounding vertices.
     std::array<Dist, 1 << DIM> vdist;
     for (int id = 0; id < 1 << dim; ++id)
@@ -377,11 +378,10 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     // Shortcut: When all vertex dists are different, we always succeed.
     if (max_value == (1 << dim) - 1)
         // Canonical: Use the vertex with the smallest valuation.
-        return ctx.vertex = pc[0]->id, true;
+        return ctx.vertex = pc[0]->id, ctx.symmetry = 1, true;
 
-    ctx.symmetry = find_symmetry (pc, ctx.bbox, dim);
-    if (ctx.symmetry)
-        return ctx.vertex = pc[0]->id, true;
+    if (find_symmetry (pc, ctx.bbox, dim))
+        return ctx.vertex = pc[0]->id, ctx.symmetry = 2, true;
 
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
@@ -392,9 +392,9 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
         good &= b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value;
         if (good && pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
             // Canonical: The vertex with the smallest unique valuation.
-            return ctx.vertex = pc[b]->id, true;
+            return ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
     }
-    return ctx.vertex = Vertex {}, false;
+    return ctx.vertex = Vertex {}, ctx.symmetry = 0, false;
 }
 
 inline bool Cubes::maybe_canonicalize_vertices (Context &ctx, bool same_parity)

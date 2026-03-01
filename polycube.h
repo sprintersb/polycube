@@ -72,12 +72,17 @@ struct PolyCube : Cubes
     {
         Flavour () = delete;
         const std::string name;
-        const bool is_fixed, is_asymm, is_symm;
+        const bool is_fixed, is_symm0, is_symm1, is_symm2;
+        Cubes::Symmetry symm;
         Flavour (const char *name) : name(std::string (name))
             , is_fixed(! strcmp (name, "fixed"))
-            , is_asymm(! strcmp (name, "asymm"))
-            , is_symm(! strcmp (name, "symm"))
-        {}
+            , is_symm0(! strcmp (name, "symm0"))
+            , is_symm1(! strcmp (name, "symm1"))
+            , is_symm2(! strcmp (name, "symm2"))
+        {
+            const int id = name[4] - '0';
+            symm = id >= 0 && id <= 2 ? id : 0;
+        }
         std::optional<int64_t> count;
         // Algorithm works on many hash slots to avoid thread clogging.
         Vector vec;
@@ -127,7 +132,8 @@ struct PolyCube : Cubes
 
     struct Have
     {
-        Flavour fixed { "fixed" }, symm { "symm" }, asymm { "asymm" };
+        Flavour fixed { "fixed" };
+        Flavour symm0 { "symm0" }, symm1 { "symm1" }, symm2 { "symmm2" };
         std::optional<Poly> corona_polynomial;
         std::optional<Cubes> smallest_corona;
         std::optional<int64_t> free_count;
@@ -137,11 +143,15 @@ struct PolyCube : Cubes
         int64_t get_free_count () const;
         VOut v ()
         {
-            return canonical_only ? VOut { &asymm, &symm } : VOut { &fixed };
+            return canonical_only
+                ? VOut { &symm0, &symm1, &symm2 }
+                : VOut { &fixed };
         }
         VIn v () const
         {
-            return canonical_only ? VIn { &asymm, &symm } : VIn { &fixed };
+            return canonical_only
+                ? VIn { &symm0, &symm1, &symm2 }
+                : VIn { &fixed };
         }
         int64_t sprout_way4 (int n_slots, int progress_at, Have &hout,
                              const Filter &filter, Pro64::Printer pp) const;

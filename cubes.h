@@ -73,8 +73,11 @@ private:
 public:
     static constexpr bool can_canonicalize = 2 <= DIM && DIM <= 6;
     static inline bool take_stat;
-    // Mirror symmetry along the specified dimension.
-    using Symmetry = std::optional<int>;
+    // 1: Asymmetric and order = #HOh.
+    // 2: PolyCube: Iff mirror symmetric.
+    //    canonical_vertex: Mirror symmetric and order = #HOh / 2.
+    // 0: Other cases.
+    using Symmetry = int;
 
     // The id of a vertex in [0, 2^DIM).
     using Vertex = std::optional<int>;
@@ -319,8 +322,8 @@ private:
     }
 public:
     void canonicalize ();
-    void canonicalize (bool &symmetric);
-    int multiplicity (bool symmetric = false) const;
+    void canonicalize (Symmetry &symmetry);
+    int multiplicity (Symmetry symmetry) const;
     Cubes canonical () const
     {
         Cubes c (*this);

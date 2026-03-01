@@ -42,7 +42,7 @@ inline bool PolyCube::MuxSet::insert (const PolyCube &pc)
 
 inline bool PolyCube::insert (VOut &vout, const Filter &filter)
 {
-    bool symm = 0;
+    Symmetry symm = 0;
     if (PolyCube::canonical_only)
         canonicalize (symm);
     if (! filter || filter (*this))
@@ -124,12 +124,24 @@ int64_t PolyCube::Have::sprout_way4 (int n_slots, int progress_at, Have &hout,
         if (n_cubes > 0 && pc_count != n_cubes)
             std::cout << "error: expected " << n_cubes << " != "
                       << pc_count << "\n";
-        for (auto f : vout)
+        if (canonical_only)
         {
-            auto s = oeis::cubes (f->name, DIM);
-            auto a = s[want.n_cells];
-            std::cout << s.name << " = " << a << " = " << *f->count << "\n";
+            auto s1 = oeis::cubes ("asymm", DIM);
+            auto a1 = s1[want.n_cells];
+            auto c1 = *hout.symm0.count + *hout.symm1.count;
+            std::cout << s1.name << " = " << a1 << " = " << c1 << "\n";
+            auto s2 = oeis::cubes ("symm", DIM);
+            auto a2 = s2[want.n_cells];
+            auto c2 = *hout.symm2.count;
+            std::cout << s2.name << " = " << a2 << " = " << c2 << "\n";
         }
+        else
+            for (auto f : vout)
+            {
+                auto s = oeis::cubes (f->name, DIM);
+                auto a = s[want.n_cells];
+                std::cout << s.name << " = " << a << " = " << *f->count << "\n";
+            }
     }
     return pc_count;
 }
@@ -178,7 +190,7 @@ void PolyCube::Have::sprout_way5 (int n_slots, int progress_at,
     if (want.fixed.count)
         hout.fixed.count = 0;
     if (want.free.count)
-        hout.symm.count = hout.asymm.count = 0;
+        hout.symm0.count = hout.symm1.count = hout.symm2.count = 0;
 
     n_slots = 2 + n_slots / want.n_parts;
     Pro64::Printer pbar =
@@ -212,7 +224,7 @@ void PolyCube::Have::sprout_way5 (int n_slots, int progress_at,
                 {
                     uint64_t c = 0;
                     for (const auto &pc : f->vec[i].set)
-                        c += pc.multiplicity (f->is_symm);
+                        c += pc.multiplicity (f->symm);
                     cnt += c;
                     i_done += 1;
                     if (want.progress && omp_get_thread_num () == 0)
@@ -264,7 +276,7 @@ inline std::ostream& operator << (std::ostream &ost,
 
 void PolyCube::Have::init (const PolyCube &pc, int n_slots)
 {
-    const bool symm = PolyCube::canonical_only;
+    const Cubes::Symmetry symm = PolyCube::canonical_only ? 2 : 0;
     VOut vout = v ();
     for (auto f : vout)
     {
@@ -287,7 +299,7 @@ int64_t PolyCube::Have::get_fixed_count () const
             cnt += ms.set.size ();
     else if (corona_polynomial)
         cnt = (*corona_polynomial) (1);
-    else if (Cubes::can_canonicalize && symm.has_vec ())
+    else if (Cubes::can_canonicalize && symm2.has_vec ())
     {
         for (auto f : v ())
         {
@@ -297,7 +309,7 @@ int64_t PolyCube::Have::get_fixed_count () const
             {
                 int64_t c = 0;
                 for (const auto &pc : f->vec[i].set)
-                    c += pc.multiplicity (f->is_symm);
+                    c += pc.multiplicity (f->symm);
                 c2 += c;
             }
             cnt += c2;
@@ -315,13 +327,15 @@ int64_t PolyCube::Have::get_free_count () const
 
     if (free_count)
         return *free_count;
-    else if (symm.count)
-        return *symm.count + *asymm.count;
-    else if (symm.has_vec ())
+    else if (symm2.count)
+        return *symm0.count + *symm1.count + *symm2.count;
+    else if (symm2.has_vec ())
     {
-        for (const auto &ms : symm.vec)
+        for (const auto &ms : symm0.vec)
             cnt += ms.set.size ();
-        for (const auto &ms : asymm.vec)
+        for (const auto &ms : symm1.vec)
+            cnt += ms.set.size ();
+        for (const auto &ms : symm2.vec)
             cnt += ms.set.size ();
     }
     else if (Cubes::can_canonicalize && fixed.has_vec ())
@@ -373,7 +387,7 @@ void PolyCube::Poly::init (Poly &poly, const Flavour *f)
                 const int coro = pc.corona().size ();
                 Assert (coro < (int) v.size (), "impossible corona size");
                 w[coro] += PolyCube::canonical_only
-                    ? pc.multiplicity (f->is_symm)
+                    ? pc.multiplicity (f->symm)
                     : 1;
             }
             for (size_t j = 0; j < v.size (); ++j)
