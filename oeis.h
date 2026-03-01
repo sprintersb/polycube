@@ -2,6 +2,7 @@
 #ifndef OEIS_H
 #define OEIS_H
 
+#include <string>
 #include <vector>
 // C
 #include <cstdint>
@@ -137,10 +138,18 @@ namespace oeis
         const Sequences &ss = cubes (name);
         return dim < (int) ss.size () ? ss[dim] : empty;
     }
+    inline const Sequence& cubes (const std::string &s, int dim)
+    {
+        return cubes (s.c_str (), dim);
+    }
 
     inline Sequence::value_type cubes (const char *name, int dim, int cells)
     {
         return cubes (name, dim)[cells];
+    }
+    inline Sequence::value_type cubes (const std::string &s, int dim, int cells)
+    {
+        return cubes (s.c_str (), dim, cells);
     }
 
     inline Sequence::value_type cubes_fixed (int dim, int cells)
