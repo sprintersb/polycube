@@ -117,7 +117,7 @@ dorun.svg: gmon.out Makefile
 	fi
 	gprof dorun | gprof2dot --wrap | dot -Tsvg > $@
 
-.PHONY: progress rotor alloc
+.PHONY: progress rotor alloc probe
 
 progress:
 	g++ test-progress.cpp -o prog.x -Wall -O3 -fopenmp $(FLAGS)
@@ -136,6 +136,10 @@ insert: config-dim.h
 insert: cubes.obj diagnostic.cpp
 	g++ test-insert.cpp $^ -o insert.x -Wall -O3 -fopenmp $(FLAGS)
 	./insert.x
+
+probe: cubes.obj diagnostic.obj polycube.obj
+	$(GXX) probe.cpp $^ -o probe.x -Wall -O3 -fopenmp $(FLAGS)
+	./probe.x
 
 clean:
 	rm -f -- $(wildcard *.[iso] *.ii *.obj *.exe *.x *.x.* dorun)
