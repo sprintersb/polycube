@@ -340,7 +340,7 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     Assert (ctx.bbox == bounding_box (), "bad box");
 
     // For each cubli, record its distances to any of the bounding vertices.
-    std::array<Dist, 1 << DIM> vdist;
+    Dim::VertexTraits<Dist> vdist;
     for (int id = 0; id < 1 << dim; ++id)
     {
         // The id of a vertex is the canonical integer in [0, 2^DIM).

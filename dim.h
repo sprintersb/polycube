@@ -52,9 +52,14 @@ struct Dim
 #else
 #error DIM=?
 #endif
+    template<typename T>
+    using VertexTraits = std::array<T, 1 << DIM>;
 
     vector_t v = all0;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
+    static const vector_t mask;
+    static const VertexTraits<Dim> diagonals;
+    static const VertexTraits<Dim> vertex_masks;
     Dim () {}
     Dim (const std::initializer_list<value_t> &il)
     {
@@ -93,6 +98,10 @@ struct Dim
     static inline vector_t combine (vector_t cond, vector_t v1, vector_t v0)
     {
         return (v1 & cond) | (v0 & ~cond);
+    }
+    static inline Dim combine (Dim cond, Dim v1, Dim v0)
+    {
+        return Dim (Dim::combine (cond.v, v1.v, v0.v));
     }
     // Shift-invariant comparison, so (int_t) <=> (int_t) won't work.
     // Benefit is that Cubes.cells don't change their order when shifted.
@@ -216,13 +225,31 @@ struct Dim
         return d;
     }
     // Cube diagonal starting at vertex id, pointing to the opposite vertex.
-    static Dim diag (int id)
+    static inline Dim diag (int id)
+    {
+        return diagonals[id];
+    }
+    static inline Dim vertex_mask (int id)
+    {
+        return vertex_masks[id];
+    }
+private:
+    // Cube diagonal starting at vertex id, pointing to the opposite vertex.
+    static Dim make_diag (int id)
     {
         Dim d;
         for (int i = 0; i < size (); ++i)
             d.set (i, (id & (1 << i)) ? -1 : 1);
         return d;
     }
+    static Dim make_mask (int id)
+    {
+        Dim d;
+        for (int i = 0; i < size (); ++i)
+            d.set (i, (id & (1 << i)) ? 0 : 0xff);
+        return d;
+    }
+public:
     // The distance to the line p0 + <v>, multiplied by DIM = |v|^2.
     int dist (Dim p0, Dim v) const
     {
@@ -247,6 +274,24 @@ struct Dim
 
 inline const Dim Dim::Min = Dim::all (INT8_MIN);
 inline const Dim Dim::Max = Dim::all (INT8_MAX);
+inline const Dim::vector_t Dim::mask = Dim::make_mask ((1 << DIM) - 1).v;
+inline const Dim::VertexTraits<Dim> Dim::diagonals =
+    [] ()
+    {
+        VertexTraits<Dim> vt;
+        for (size_t id = 0; id < vt.size (); ++id)
+            vt[id] = Dim::make_diag (id);
+        return vt;
+    } ();
+inline const Dim::VertexTraits<Dim> Dim::vertex_masks =
+    [] ()
+    {
+        VertexTraits<Dim> vt;
+        for (size_t id = 0; id < vt.size (); ++id)
+            vt[id] = Dim::make_mask (id);
+        return vt;
+    } ();
+
 
 struct Box
 {
@@ -264,10 +309,7 @@ struct Box
     }
     Dim vertex (int id) const
     {
-        Dim d;
-        for (int i = 0; i < lo.size (); ++i)
-            d.set (i, (id & (1 << i)) ? hi[i] : lo[i]);
-        return d;
+        return Dim::combine (Dim::vertex_mask (id), lo, hi);
     }
 };
 
