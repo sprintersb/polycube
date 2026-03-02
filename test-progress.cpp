@@ -28,7 +28,7 @@ void prog ()
     p.done ();
 
     std::cout << "Test progress bar\n";
-    p.printer = pbar;
+    p.printer = & pbar;
     p.reset ();
     for (int i = 0; i < 1000; ++i)
     {
