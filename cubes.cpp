@@ -351,7 +351,8 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
         for (Dim d : *this)
             // Get the distance to bounding vertex id's cube diagonal.
             // This is better than just adding 1 for a cubli of its distance.
-            vd[d.dist (ecke)] += 1 + 13 * d.dist (ecke, diag);
+            //vd[d.dist (ecke)] += 1 + 13 * d.dist (ecke, diag);
+            vd[d.dist (ecke)] += 1 + 13 * d.pseudo_dist (ecke, diag);
     }
 
     // Sort vdist[].

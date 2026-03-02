@@ -257,6 +257,11 @@ public:
         const Dim r = d * size() - v * (d * v);
         return r.abs ();
     }
+    int pseudo_dist (Dim p0, Dim) const
+    {
+        const Dim d = *this - p0;
+        return d * d;
+    }
     static Dim rand (Dim range)
     {
         Dim d;
