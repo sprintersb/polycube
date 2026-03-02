@@ -32,6 +32,8 @@
 #error CUBES_ARRAY requires to define -DCELLS=<value>
 #endif
 
+template<typename T>
+using VertexTraits = std::array<T, 1 << DIM>;
 struct DimIterator;
 
 struct Dim
@@ -52,8 +54,6 @@ struct Dim
 #else
 #error DIM=?
 #endif
-    template<typename T>
-    using VertexTraits = std::array<T, 1 << DIM>;
 
     vector_t v = all0;
     static inline constexpr vector_t all0 = (vector_t) (int_t) 0;
@@ -280,7 +280,7 @@ public:
 inline const Dim Dim::Min = Dim::all (INT8_MIN);
 inline const Dim Dim::Max = Dim::all (INT8_MAX);
 inline const Dim::vector_t Dim::mask = Dim::make_mask ((1 << DIM) - 1).v;
-inline const Dim::VertexTraits<Dim> Dim::diagonals =
+inline const VertexTraits<Dim> Dim::diagonals =
     [] ()
     {
         VertexTraits<Dim> vt;
@@ -288,7 +288,7 @@ inline const Dim::VertexTraits<Dim> Dim::diagonals =
             vt[id] = Dim::make_diag (id);
         return vt;
     } ();
-inline const Dim::VertexTraits<Dim> Dim::vertex_masks =
+inline const VertexTraits<Dim> Dim::vertex_masks =
     [] ()
     {
         VertexTraits<Dim> vt;

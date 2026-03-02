@@ -55,8 +55,8 @@ enum
 inline std::array<std::atomic<int64_t>, STAT_sentinel> stat;
 
 struct Dist;
-using VertexValues = std::array<int, 1 << DIM>;
-using DistPointers = std::array<Dist*, 1 << DIM>;
+using VertexValues = VertexTraits<int>;
+using DistPointers = VertexTraits<Dist*>;
 
 // Cubes is a vector / array since that is most memory friendly.
 // Normalized such that bounding box lower is all 0's.
