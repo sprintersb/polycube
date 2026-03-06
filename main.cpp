@@ -65,7 +65,7 @@ void show_growth_rates ()
 
 void check_sequences ()
 {
-    for (int dim = 2; dim <= 3; ++dim)
+    for (int dim = 2; dim <= 6; ++dim)
     {
         printf ("== checking dim %d: free = symm + asymm ==\n", dim);
         auto sf = oeis::cubes ("free", dim);
@@ -239,9 +239,13 @@ int main_polycube (int argc, char *argv[])
                 poly = PolyCube::Poly (have[i]);
         }
 
-        int64_t ccount = have[i].get_fixed_count ();
+        int64_t ccount = -1;
+        if (want.fixed.count)
+        {
+            ccount = have[i].get_fixed_count ();
+            std::cout << ccount << " polycubes";
+        }
 
-        std::cout << ccount << " polycubes";
         if (have[i].smallest_corona)
             std::cout << "  (coro min: "
                       << have[i].smallest_corona->corona().size() << ")";
@@ -274,6 +278,7 @@ int main_polycube (int argc, char *argv[])
 
         if (way != 4 || extra_spice /* corona_margin */ <= 0)
             if (oeis::cubes_fixed (dim, i) >= 0
+                && ccount >= 0
                 && ccount != oeis::cubes_fixed (dim, i))
             {
                 error ("cube count %" PRIi64 " != %" PRIi64 " expected count",
