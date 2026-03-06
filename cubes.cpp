@@ -225,6 +225,7 @@ private:
 #endif
 };
 
+// Return 2 (mirror symmetry) or 0 (unknown symmetry).
 inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
                                   int dim) const -> Symmetry
 {
@@ -245,6 +246,10 @@ inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
     return matches_flipped (d, bbox) ? 2 : 0;
 }
 
+// Size of the PolyCube's orbit in HOh.  Symmetry is known to be:
+// 2) Mirror symmetric, i.e. multiplicity <= #HOh / 2,
+// 1) Asymmetric, i.e. multiplicity = #HOh,
+// 0) Not mirror symmetric; more is not known.
 int Cubes::multiplicity (Symmetry symmetry) const
 {
     if (symmetry == 1)
@@ -295,6 +300,9 @@ void Cubes::canonicalize ()
 
 // Find a canonical representation, and determine whether it is congruent
 // to some flipped version of itself.
+// Symmetry = 2: Has mirror symmetry, i.e. multiplicity <= #HOh / 2.
+// Symmetry = 1: Has no symmetry, i.e. multiplicity = #HOh.
+// Symmetry = 0: Doesn't have mirror symmetry.
 void Cubes::canonicalize (Symmetry &symmetry)
 {
     Context ctx;
@@ -332,8 +340,11 @@ void Cubes::canonicalize (Symmetry &symmetry)
     }
 }
 
-// Return optional id of a canonical vertex in [0, 2^DIM).
-// Set optional symmetry to a dimension of mirror symmetry.
+// On success:
+// 1) Set ctx.vertex to the id of a canonical vertex in [0, 2^DIM),
+// 2) Set ctx.vvs[id] to the values / colors assigned to the 2^DIM vertices,
+// 3) Set ctx.symmetry to 1 or 2: We have multiplicity #HOh / ctx.symmetry.
+// On failure, ctx.vertex is empty.  In any case ctx.bbox is unchanged.
 inline bool Cubes::canonical_vertex (Context &ctx) const
 {
     const int dim = ctx.dim;
@@ -405,6 +416,7 @@ inline bool Cubes::maybe_canonicalize_vertices (Context &ctx, bool same_parity)
     return !! ctx.vertex;
 }
 
+// Carry out vertex canonicalization by their coloring in ctx.vvs[].
 inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
 {
     Assert (!! ctx.vertex, "empty Vertex");
@@ -431,6 +443,8 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
     }
     // Now sort the dim vertices adjacent to id.
     uint64_t todo = 0;
+    if (DIM >= 7)
+        unreachable ("todo: DIM >= 7");
     for (int b = 0; b < dim; ++b)
         todo |= (uint64_t) 1 << vvs[1 << b];
     // Vertex 0 has dim neighbors, canonicalize them such that higher
