@@ -79,6 +79,35 @@ void check_sequences ()
                 printf (" %d", i);
         printf (" ok\n");
     }
+    for (int dim = 3; dim <= 6; ++dim)
+    {
+        printf ("== checking dim %d: free = strict + free (dim=%d) ==\n",
+                dim, dim - 1);
+        auto s1 = oeis::cubes ("free", dim);
+        auto s2 = oeis::cubes ("free", dim - 1);
+        auto s3 = oeis::cubes ("strict", dim);
+        for (int i = 0; s1[i] >= 0 && s2[i] >= 0 && s3[i] >= 0; ++i)
+            if (s1[i] != s2[i] + s3[i])
+                error ("i = %d: %" PRIi64 " != %" PRIi64 " + %" PRIi64,
+                       i, s1[i], s2[i], s3[i]);
+            else
+                printf (" %d", i);
+        printf (" ok\n");
+    }
+}
+
+void derived_sequences ()
+{
+    printf ("== free strict ==\n");
+    for (int dim = 3; dim <= 6; ++dim)
+    {
+        auto sf1 = oeis::cubes ("free", dim);
+        auto sf0 = oeis::cubes ("free", dim - 1);
+        std::cout << "dim " << dim << ": ";
+        for (int i = 0; sf1[i] >= 0 && sf0[i] >= 0; ++i)
+            std::cout << (sf1[i] - sf0[i]) << ", ";
+        std::cout << "\n";
+    }
 }
 
 void print_stat ()
@@ -112,6 +141,7 @@ int main_polycube (int argc, char *argv[])
 {
     check_sequences ();
     show_growth_rates ();
+    derived_sequences ();
 
     const int dim = DIM;
     int level = 10;
