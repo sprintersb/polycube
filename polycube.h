@@ -136,7 +136,10 @@ struct PolyCube : Cubes
         Flavour symm0 { "symm0" }, symm1 { "symm1" }, symm2 { "symmm2" };
         std::optional<Poly> corona_polynomial;
         std::optional<Cubes> smallest_corona;
-        std::optional<int64_t> free_count;
+        struct
+        {
+            std::optional<int64_t> free, symm, asymm;
+        } count;
 
         void init (const PolyCube&, int n_slots);
         int64_t get_fixed_count () const;

@@ -126,13 +126,15 @@ int64_t PolyCube::Have::sprout_way4 (int n_slots, int progress_at, Have &hout,
                       << pc_count << "\n";
         if (canonical_only)
         {
+            hout.count.asymm = *hout.symm0.count + *hout.symm1.count;
+            hout.count.symm = *hout.symm2.count;
             auto s1 = oeis::cubes ("asymm", DIM);
             auto a1 = s1[want.n_cells];
-            auto c1 = *hout.symm0.count + *hout.symm1.count;
+            auto c1 = *hout.count.asymm;
             std::cout << s1.name << " = " << a1 << " = " << c1 << "\n";
             auto s2 = oeis::cubes ("symm", DIM);
             auto a2 = s2[want.n_cells];
-            auto c2 = *hout.symm2.count;
+            auto c2 = *hout.count.symm;
             std::cout << s2.name << " = " << a2 << " = " << c2 << "\n";
         }
         else
@@ -190,7 +192,10 @@ void PolyCube::Have::sprout_way5 (int n_slots, int progress_at,
     if (want.fixed.count)
         hout.fixed.count = 0;
     if (want.free.count)
+    {
         hout.symm0.count = hout.symm1.count = hout.symm2.count = 0;
+        hout.count.symm = hout.count.asymm = 0;
+    }
 
     n_slots = 2 + n_slots / want.n_parts;
     Pro64::Printer pbar =
@@ -209,13 +214,18 @@ void PolyCube::Have::sprout_way5 (int n_slots, int progress_at,
         std::cout << "part " << (1 + part) << "/" << want.n_parts << "\n";
         count += sprout_way4 (n_slots, 1 + progress_at / want.n_parts,
                               hout, filter, pbar);
+        if (PolyCube::canonical_only)
+        {
+            *hout.count.asymm += *hout.symm0.count + *hout.symm1.count;
+            *hout.count.symm += *hout.symm2.count;
+        }
         if (poly)
             *poly += Poly (hout);
         if (want.fixed.count && PolyCube::canonical_only && !poly)
         {
             std::cout << "free -> fixed\n";
             std::atomic<int> i_done = 0;
-            Pro64 p (2 * n_slots, omp_get_max_threads() / 2, pprint64_int);
+            Pro64 p (3 * n_slots, omp_get_max_threads() / 2, pprint64_int);
             for (auto f : vout)
             {
                 int64_t cnt = 0;
@@ -244,7 +254,7 @@ void PolyCube::Have::sprout_way5 (int n_slots, int progress_at,
         f->vec.clear ();
 
     if (PolyCube::canonical_only)
-        hout.free_count = count;
+        hout.count.free = count;
     else
         hout.fixed.count = count;
     if (want.fixed.count && PolyCube::canonical_only && poly)
@@ -254,6 +264,17 @@ void PolyCube::Have::sprout_way5 (int n_slots, int progress_at,
     if (n_cubes > 0 && count != n_cubes)
         std::cout << "error: expected " << n_cubes << " != "
                   << count << "\n";
+    if (canonical_only)
+    {
+        auto s1 = oeis::cubes ("asymm", DIM);
+        auto a1 = s1[want.n_cells];
+        auto c1 = *hout.count.asymm;
+        std::cout << s1.name << " = " << a1 << " = " << c1 << "\n";
+        auto s2 = oeis::cubes ("symm", DIM);
+        auto a2 = s2[want.n_cells];
+        auto c2 = *hout.count.symm;
+        std::cout << s2.name << " = " << a2 << " = " << c2 << "\n";
+    }
 }
 
 
@@ -325,8 +346,8 @@ int64_t PolyCube::Have::get_free_count () const
 {
     int64_t cnt = 0;
 
-    if (free_count)
-        return *free_count;
+    if (count.free)
+        return *count.free;
     else if (symm2.count)
         return *symm0.count + *symm1.count + *symm2.count;
     else if (symm2.has_vec ())
