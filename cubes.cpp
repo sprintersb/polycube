@@ -1,6 +1,4 @@
 #include <unordered_set>
-// C
-#include <cstring> // memset
 // Own
 #include "cubes.h"
 #include "debug.h"
@@ -85,8 +83,7 @@ struct Dist : DistBase
     int value = -1;
     Dist ()
     {
-        std::memset (DistBase::data(), 0,
-                     DistBase::size() * sizeof (DistBase::value_type));
+        DistBase::fill (0);
     }
     int size () const
     {
