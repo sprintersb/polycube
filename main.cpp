@@ -145,15 +145,13 @@ int main_polycube (int argc, char *argv[])
 
     const int dim = DIM;
     int level = 10;
-    int way = 4;
     int extra_spice = 0;
     int leap = 1;
     Cubes::take_stat = false;
 
     if (argc > 1)   sscanf (argv[1], "%i", &level);
-    if (argc > 2)   sscanf (argv[2], "%i", &way);
-    if (argc > 3)   sscanf (argv[3], "%i", &extra_spice);
-    if (argc > 4)   sscanf (argv[4], "%i", &leap);
+    if (argc > 2)   sscanf (argv[2], "%i", &extra_spice);
+    if (argc > 3)   sscanf (argv[3], "%i", &leap);
 
     PolyCube::canonical_only = Cubes::can_canonicalize;
 
@@ -163,7 +161,6 @@ int main_polycube (int argc, char *argv[])
     std::cout << "CUBES_VECT DIM=" << DIM << "\n";
 #endif
 
-    assert (way == 4 || way == 5);
 #ifdef CUBES_ARRAY
     assert (level <= CELLS);
 #endif
@@ -188,7 +185,7 @@ int main_polycube (int argc, char *argv[])
     want.free.cubes = Cubes::can_canonicalize;
     want.free.count = Cubes::can_canonicalize;
     want.fixed.cubes = ! Cubes::can_canonicalize;
-    want.fixed.count = true;
+    want.fixed.count = 0;//true;
     want.n_parts = extra_spice;
 
     want.progress = is_a_tty (stdout);
@@ -214,47 +211,25 @@ int main_polycube (int argc, char *argv[])
         {
             PolyCube pc1 { Dim::all0 };
             have[1].init (pc1, n_slots);
-            if (way == 5 && want.corona_polynomial)
+            if (want.corona_polynomial)
                 poly = PolyCube::Poly (have[i]);
-            have[i].smallest_corona = pc1;
         }
         else
         {
             for (auto &s : stat)
                 s = 0;
 
-            if (way == 4)
-            {
-                int corona_margin = extra_spice;
-                int max_corona = corona_margin > 0
-                    ? (corona_margin
-                       + have[i - 1].smallest_corona->corona().size())
-                    : -1;
-                PolyCube::Filter filter = nullptr;
-                if (max_corona > 0)
-                    filter = [max_corona](const PolyCube &pc)
-                    {
-                        return ! pc.has_large_corona (max_corona);
-                    };
-                have[i - 1].sprout_way4 (n_slots, progress_at, have[i],
-                                         filter, nullptr);
-            }
-            else if (way == 5)
-            {
-                want.leap = i == level && leap ? leap : 0;
-                if (want.leap)
-                    want.free.cubes = want.fixed.cubes = false;
-                const auto &hin = have[want.leap ? i - want.leap : i - 1];
-                if (i <= level - leap || i == level)
-                    hin.sprout_way5 (n_slots, progress_at, have[i]);
-                else
-                {
-                    std::cout << "leaped\n";
-                    continue;
-                }
-            }
+            want.leap = i == level && leap ? leap : 0;
+            if (want.leap)
+                want.free.cubes = want.fixed.cubes = false;
+            const auto &hin = have[want.leap ? i - want.leap : i - 1];
+            if (i <= level - leap || i == level)
+                hin.sprout_way5 (n_slots, progress_at, have[i]);
             else
-                unreachable ("unknown way %d", way);
+            {
+                std::cout << "leaped\n\n";
+                continue;
+            }
         }
 
         print_stat ();
@@ -263,30 +238,13 @@ int main_polycube (int argc, char *argv[])
             if (int ci1 = oeis::cubes_free (dim - 1, i); ci1 >= 0)
                 printf ("free %dd = %.1f%%\n", DIM - 1, 100. * ci1 / ci);
 
-        if (want.corona_polynomial)
-        {
-            if (way == 4)
-                poly = PolyCube::Poly (have[i]);
-        }
-
         int64_t ccount = -1;
         if (want.fixed.count)
         {
             ccount = have[i].get_fixed_count ();
             std::cout << ccount << " polycubes";
         }
-
-        if (have[i].smallest_corona)
-            std::cout << "  (coro min: "
-                      << have[i].smallest_corona->corona().size() << ")";
         std::cout << "\n";
-        if (way == 4 && extra_spice && have[i].smallest_corona)
-        {
-            const int scs = have[i].smallest_corona->corona().size();
-            const double r = 2 * sqrt (2 * i - 1) + 2;
-            printf ("coro min / calculated = %d / %.2f = %.2f\n",
-                    scs, r, scs / r);
-        }
 
         if (poly)
         {
@@ -294,39 +252,13 @@ int main_polycube (int argc, char *argv[])
             std::cout.flush();
         }
 
-        if (way == 4 && extra_spice > 0)
+        if (oeis::cubes_fixed (dim, i) >= 0
+            && ccount >= 0
+            && ccount != oeis::cubes_fixed (dim, i))
         {
-            auto small_corona = PolyCube::find_min_corona (have[i]);
-            if (! small_corona.empty ())
-            {
-                const auto &best = * small_corona.begin();
-                std::cout << best.ascii ();
-                std::cout << cubes_border (best).svg() << "\n";
-            }
-            std::cout.flush();
+            error ("cube count %" PRIi64 " != %" PRIi64 " expected count",
+                   ccount, oeis::cubes_fixed (dim, i));
         }
-
-        if (way != 4 || extra_spice /* corona_margin */ <= 0)
-            if (oeis::cubes_fixed (dim, i) >= 0
-                && ccount >= 0
-                && ccount != oeis::cubes_fixed (dim, i))
-            {
-                error ("cube count %" PRIi64 " != %" PRIi64 " expected count",
-                       ccount, oeis::cubes_fixed (dim, i));
-            }
-
-        if (0 && i <= 3 && DIM == 2)
-            for (auto f : have[i].v ())
-                for (const auto &ms: f->vec)
-                    for (const auto &pc : ms.set)
-                    {
-                        auto &&ps = cubes_border (pc);
-                        for (const auto &pgon : ps)
-                        {
-                            std::cout << pgon;
-                            std::cout << pc.ascii ();
-                        }
-                    }
     }
     exit (0); // Faster than waiting for all them destructors.
 }

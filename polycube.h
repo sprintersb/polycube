@@ -135,7 +135,6 @@ struct PolyCube : Cubes
         Flavour fixed { "fixed" };
         Flavour symm0 { "symm0" }, symm1 { "symm1" }, symm2 { "symmm2" };
         std::optional<Poly> corona_polynomial;
-        std::optional<Cubes> smallest_corona;
         struct
         {
             std::optional<int64_t> free, symm, asymm;
@@ -168,7 +167,6 @@ struct PolyCube : Cubes
             bool count, cubes;
         } free, fixed;
         bool corona_polynomial;
-        bool smallest_corona;
         int way;
         int leap;
         int n_parts;
