@@ -185,12 +185,11 @@ int main_polycube (int argc, char *argv[])
     want.free.cubes = Cubes::can_canonicalize;
     want.free.count = Cubes::can_canonicalize;
     want.fixed.cubes = ! Cubes::can_canonicalize;
-    want.fixed.count = 0;//true;
+    want.fixed.count = ! Cubes::can_canonicalize;
     want.n_parts = extra_spice;
 
     want.progress = is_a_tty (stdout);
     Progress<int64_t>::quiet = ! want.progress;
-    int progress_at = 200;
 
     want.corona_polynomial = 0;//true;
 
@@ -200,12 +199,14 @@ int main_polycube (int argc, char *argv[])
 
     for (int i = 1; i <= level; ++i)
     {
-        std::cout << "== " << i << " ==\n";
+        std::cout << "\n== " << i << " ==\n";
 
         want.n_cells = i;
         want.n_cells_final = level;
 
         auto &poly = have[i].corona_polynomial;
+
+        want.announce_expectations ();
 
         if (i == 1)
         {
@@ -213,6 +214,9 @@ int main_polycube (int argc, char *argv[])
             have[1].init (pc1, n_slots);
             if (want.corona_polynomial)
                 poly = PolyCube::Poly (have[i]);
+            have[1].fixed.count = 1;
+            have[1].count.free = have[1].count.symm = 1;
+            have[1].count.asymm = 0;
         }
         else
         {
@@ -224,13 +228,15 @@ int main_polycube (int argc, char *argv[])
                 want.free.cubes = want.fixed.cubes = false;
             const auto &hin = have[want.leap ? i - want.leap : i - 1];
             if (i <= level - leap || i == level)
-                hin.sprout_way5 (n_slots, progress_at, have[i]);
+                have[i].sprout_way5 (n_slots, hin);
             else
             {
                 std::cout << "leaped\n\n";
                 continue;
             }
         }
+
+        have[i].show_result ();
 
         print_stat ();
 
@@ -242,9 +248,8 @@ int main_polycube (int argc, char *argv[])
         if (want.fixed.count)
         {
             ccount = have[i].get_fixed_count ();
-            std::cout << ccount << " polycubes";
+            std::cout << ccount << " polycubes\n";
         }
-        std::cout << "\n";
 
         if (poly)
         {

@@ -16,12 +16,44 @@ int64_t PolyCube::expected_count (int n_cells)
         : oeis::cubes_fixed (DIM, n_cells);
 }
 
+void PolyCube::Want::announce_expectations () const
+{
+    const int64_t n_cubes = PolyCube::expected_count (want.n_cells);
+    const char *kind = PolyCube::canonical_only ? "free" : "fixed";
+    if (n_cubes > 0)
+        std::cout << n_cubes << " " << kind << " cubs expected\n";
+}
+
+void PolyCube::Have::show_result () const
+{
+    const int64_t n_cubes = PolyCube::expected_count (want.n_cells);
+    const char *kind = PolyCube::canonical_only ? "free" : "fixed";
+    int64_t ccount = PolyCube::canonical_only
+        ? *count.free : *fixed.count;
+
+    std::cout << ccount << " " << kind << " cubs found\n";
+    if (n_cubes > 0 && ccount != n_cubes)
+        std::cout << "error: expected " << n_cubes << " != "
+                  << ccount << "\n";
+
+    if (canonical_only)
+    {
+        auto s1 = oeis::cubes ("asymm", DIM);
+        auto a1 = s1[want.n_cells];
+        auto c1 = *count.asymm;
+        std::cout << s1.name << " = " << a1 << " = " << c1 << "\n";
+        auto s2 = oeis::cubes ("symm", DIM);
+        auto a2 = s2[want.n_cells];
+        auto c2 = *count.symm;
+        std::cout << s2.name << " = " << a2 << " = " << c2 << "\n";
+    }
+}
+
 inline Pro64::Printer pprint64 =
     [] (std::ostringstream &ost, Pro64 &p, int64_t i) -> void
     {
-        ost << i << " Cubs";
         if (p.total > 0)
-            ost << " = " << 100.0 * i / p.total << "%";
+            p.print_bar (ost, 79, (double) i / p.total);
     };
 
 inline Pro64::Printer pprint64_int =
@@ -80,25 +112,26 @@ int PolyCube::sprout (VOut &vout, const Filter &filter) const
     return new_count;
 }
 
-int64_t PolyCube::Have::sprout_way4 (int n_slots, int progress_at, Have &hout,
-                                     const Filter &filter, Pro64::Printer pp)
-    const
+int64_t PolyCube::Have::sprout (int n_slots, const Have &hin,
+                                const Filter &filter, Pro64::Printer pp)
 {
-    progress_at *= omp_get_max_threads ();
-    const auto vin = v();
-    auto vout = hout.v();
+    const auto vin = hin.v();
+    auto vout = v();
     for (auto f : vout)
         f->vec.resize (n_slots);
 
-    // Only for printing stat.
-    const int64_t n_cubes = PolyCube::expected_count (want.n_cells);
-    const char *kind = PolyCube::canonical_only ? "free" : "fixed";
-    if (! filter && n_cubes > 0 && ! want.leap)
-        std::cout << n_cubes << " " << kind << " cubs expected\n";
-    Pro64 pro (n_cubes, progress_at, pp && n_cubes > 0 ? pp : pprint64);
+    // Progress: "Integrate" over the input to get exact mileage.
+    std::vector<int64_t> dd;
+    int64_t n_in = 0;
+    for (auto f : vin)
+        for (auto &ms : f->vec)
+            dd.push_back (n_in += ms.set.size ());
+    Pro64 pro (n_in, 1, pp ? pp : pprint64);
 
     std::atomic<int64_t> pc_count = 0;
+    int64_t j_off = 0;
     for (auto f : vin)
+    {
 #pragma omp parallel for schedule(dynamic)
         for (size_t j = 0; j < f->vec.size (); ++j)
         {
@@ -108,8 +141,10 @@ int64_t PolyCube::Have::sprout_way4 (int n_slots, int progress_at, Have &hout,
                     : pc.sprout (vout, filter);
             // Print stat.
             if (want.progress && omp_get_thread_num () == 0)
-                pro.update (pc_count);
+                pro.update (dd[j + j_off]);
         } // parallel for
+        j_off += f->vec.size ();
+    }
     pro.done ();
     for (auto f : vout)
     {
@@ -118,163 +153,125 @@ int64_t PolyCube::Have::sprout_way4 (int n_slots, int progress_at, Have &hout,
             *f->count += ms.set.size ();
     }
 
-    if (! filter && ! want.leap)
-    {
-        std::cout << pc_count << " " << kind << " cubs found\n";
-        if (n_cubes > 0 && pc_count != n_cubes)
-            std::cout << "error: expected " << n_cubes << " != "
-                      << pc_count << "\n";
-        if (canonical_only)
-        {
-            hout.count.asymm = *hout.symm0.count + *hout.symm1.count;
-            hout.count.symm = *hout.symm2.count;
-            auto s1 = oeis::cubes ("asymm", DIM);
-            auto a1 = s1[want.n_cells];
-            auto c1 = *hout.count.asymm;
-            std::cout << s1.name << " = " << a1 << " = " << c1 << "\n";
-            auto s2 = oeis::cubes ("symm", DIM);
-            auto a2 = s2[want.n_cells];
-            auto c2 = *hout.count.symm;
-            std::cout << s2.name << " = " << a2 << " = " << c2 << "\n";
-        }
-        else
-            for (auto f : vout)
-            {
-                auto s = oeis::cubes (f->name, DIM);
-                auto a = s[want.n_cells];
-                std::cout << s.name << " = " << a << " = " << *f->count << "\n";
-            }
-    }
     return pc_count;
 }
 
 
-void PolyCube::Have::sprout_way5 (int n_slots, int progress_at,
-                                  Have &hout) const
+void PolyCube::Have::sprout_way5 (int n_slots, const Have &hin)
 {
+    int64_t ccount = 0;
+    auto &poly = corona_polynomial;
+
     if (! want.leap)
     {
-        sprout_way4 (n_slots, progress_at, hout, nullptr, nullptr);
+        ccount = sprout (n_slots, hin, nullptr, nullptr);
         if (want.corona_polynomial)
-            hout.corona_polynomial = Poly (hout);
-        return;
-    }
-    const auto vin = v();
-    auto vout = hout.v();
-    const int64_t n_cubes = PolyCube::expected_count (want.n_cells);
-    int leap = want.leap;
-    const char *kind = PolyCube::canonical_only ? "free" : "fixed";
-    if (n_cubes > 0)
-        std::cout << n_cubes << " " << kind << " cubs expected\n";
-    std::cout << "want:" << (want.free.count ? " free.count" : "")
-              << (want.fixed.count ? " fixed.count" : "")
-              << (want.corona_polynomial ? " polynomial" : "") << "\n";
-
-    std::cout << "leaping " << leap << ": " << (want.n_cells - leap)
-              << ".." << want.n_cells << " with " << want.n_parts
-              << " parts\n";
-    std::cout.flush ();
-    Assert (want.n_parts >= 1, "cannot leap with %d parts", want.n_parts);
-    // leap = 1 isn't real leap-frogging.
-    leap = leap == 1 ? 0 : leap;
-
-    if (want.free.cubes || want.fixed.cubes)
-        error ("leaping can't produce cubes, only counts and polynomial");
-    if (want.free.count && ! Cubes::can_canonicalize)
-        error ("can't canonicalize in dim %d", DIM);
-    if (! want.free.count && ! want.fixed.count && ! want.corona_polynomial)
-        error ("you better want something");
-
-    // Piecing together the poly by doing one slot at a time.
-    auto &poly = hout.corona_polynomial;
-    if (want.corona_polynomial)
-        poly = Poly ();
-    if (want.fixed.count)
-        hout.fixed.count = 0;
-    if (want.free.count)
-    {
-        hout.symm0.count = hout.symm1.count = hout.symm2.count = 0;
-        hout.count.symm = hout.count.asymm = 0;
-    }
-
-    n_slots = 2 + n_slots / want.n_parts;
-    Pro64::Printer pbar =
-        [] (std::ostringstream &ost, Pro64 &p, int64_t i) -> void
+            poly = Poly (*this);
+        if (!! symm0.count && !! symm1.count && !! symm2.count)
         {
-            p.print_bar (ost, 79, (double) want.n_parts * i / p.total);
-        };
-
-    int64_t count = 0;
-    for (int part = 0; part < want.n_parts; ++part)
-    {
-        const Filter filter = [part] (const PolyCube &pc)
-        {
-            return part == (int) (pc.hash () % want.n_parts);
-        };
-        std::cout << "part " << (1 + part) << "/" << want.n_parts << "\n";
-        count += sprout_way4 (n_slots, 1 + progress_at / want.n_parts,
-                              hout, filter, pbar);
-        if (PolyCube::canonical_only)
-        {
-            *hout.count.asymm += *hout.symm0.count + *hout.symm1.count;
-            *hout.count.symm += *hout.symm2.count;
+            count.symm = *symm2.count;
+            count.asymm = *symm0.count + *symm1.count;
+            count.free = *count.asymm + *count.symm;
         }
-        if (poly)
-            *poly += Poly (hout);
-        if (want.fixed.count && PolyCube::canonical_only && !poly)
+    }
+    else
+    {
+        const auto vin = hin.v();
+        auto vout = v();
+        int leap = want.leap;
+        std::cout << "want:" << (want.free.count ? " free.count" : "")
+                  << (want.fixed.count ? " fixed.count" : "")
+                  << (want.corona_polynomial ? " polynomial" : "") << "\n";
+
+        std::cout << "leaping " << leap << ": " << (want.n_cells - leap)
+                  << ".." << want.n_cells << " with " << want.n_parts
+                  << " parts\n";
+        std::cout.flush ();
+        Assert (want.n_parts >= 1, "cannot leap with %d parts", want.n_parts);
+        // leap = 1 isn't real leap-frogging.
+        leap = leap == 1 ? 0 : leap;
+
+        if (want.free.cubes || want.fixed.cubes)
+            error ("leaping can't produce cubes, only counts and polynomial");
+        if (want.free.count && ! Cubes::can_canonicalize)
+            error ("can't canonicalize in dim %d", DIM);
+        if (! want.free.count && ! want.fixed.count && ! want.corona_polynomial)
+            error ("you better want something");
+
+        // Piecing together the poly by doing one slot at a time.
+        auto &poly = corona_polynomial;
+        if (want.corona_polynomial)
+            poly = Poly ();
+        if (want.fixed.count)
+            fixed.count = 0;
+        if (want.free.count)
         {
-            std::cout << "free -> fixed\n";
-            std::atomic<int> i_done = 0;
-            Pro64 p (3 * n_slots, omp_get_max_threads() / 2, pprint64_int);
-            for (auto f : vout)
+            symm0.count = symm1.count = symm2.count = 0;
+            count.symm = count.asymm = 0;
+        }
+
+        n_slots = 2 + n_slots / want.n_parts;
+
+        for (int part = 0; part < want.n_parts; ++part)
+        {
+            const Pro64::Printer pbar = [part] (auto &ost, Pro64 &p, int64_t i)
             {
-                int64_t cnt = 0;
-#pragma omp parallel for schedule(dynamic) reduction(+ : cnt)
-                for (size_t i = 0; i < f->vec.size (); ++i)
-                {
-                    uint64_t c = 0;
-                    for (const auto &pc : f->vec[i].set)
-                        c += pc.multiplicity (f->symm);
-                    cnt += c;
-                    i_done += 1;
-                    if (want.progress && omp_get_thread_num () == 0)
-                        p.update (i_done);
-                }
-                *hout.fixed.count += cnt;
+                ost << (1 + part) << "/" << want.n_parts << " ";
+                p.print_bar (ost, 79, (double) i / p.total);
+            };
+            const Filter filter = [part] (const PolyCube &pc)
+            {
+                return part == (int) (pc.hash () % want.n_parts);
+            };
+
+            ccount += sprout (n_slots, hin, filter, pbar);
+
+            if (PolyCube::canonical_only)
+            {
+                *count.asymm += *symm0.count + *symm1.count;
+                *count.symm += *symm2.count;
             }
-        }
-        // This is why we are here: Purging the output each time is
-        // slow but saves the memory.
-        for (auto f : vout)
+            if (poly)
+                *poly += Poly (*this);
+            if (want.fixed.count && PolyCube::canonical_only && !poly)
+            {
+                std::cout << "free -> fixed\n";
+                std::atomic<int> i_done = 0;
+                Pro64 p (3 * n_slots, omp_get_max_threads() / 2, pprint64_int);
+                for (auto f : vout)
+                {
+                    int64_t cnt = 0;
+#pragma omp parallel for schedule(dynamic) reduction(+ : cnt)
+                    for (size_t i = 0; i < f->vec.size (); ++i)
+                    {
+                        uint64_t c = 0;
+                        for (const auto &pc : f->vec[i].set)
+                            c += pc.multiplicity (f->symm);
+                        cnt += c;
+                        i_done += 1;
+                        if (want.progress && omp_get_thread_num () == 0)
+                            p.update (i_done);
+                    }
+                    *fixed.count += cnt;
+                }
+            }
+            // This is why we are here: Purging the output each time is
+            // slow but saves the memory.
+            for (auto f : vout)
 #pragma omp parallel for schedule(dynamic)
-            for (size_t i = 0; i < f->vec.size (); ++i)
-                f->vec[i].set.clear ();
+                for (size_t i = 0; i < f->vec.size (); ++i)
+                    f->vec[i].set.clear ();
+        } // for n_parts.
+        for (auto f : vout)
+            f->vec.clear ();
     }
-    for (auto f : vout)
-        f->vec.clear ();
 
     if (PolyCube::canonical_only)
-        hout.count.free = count;
+        count.free = ccount;
     else
-        hout.fixed.count = count;
+        fixed.count = ccount;
     if (want.fixed.count && PolyCube::canonical_only && poly)
-        hout.fixed.count = (*poly) (1);
-
-    std::cout << count << " " << kind << " cubs found\n";
-    if (n_cubes > 0 && count != n_cubes)
-        std::cout << "error: expected " << n_cubes << " != "
-                  << count << "\n";
-    if (canonical_only)
-    {
-        auto s1 = oeis::cubes ("asymm", DIM);
-        auto a1 = s1[want.n_cells];
-        auto c1 = *hout.count.asymm;
-        std::cout << s1.name << " = " << a1 << " = " << c1 << "\n";
-        auto s2 = oeis::cubes ("symm", DIM);
-        auto a2 = s2[want.n_cells];
-        auto c2 = *hout.count.symm;
-        std::cout << s2.name << " = " << a2 << " = " << c2 << "\n";
-    }
+        fixed.count = (*poly) (1);
 }
 
 

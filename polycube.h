@@ -155,9 +155,9 @@ struct PolyCube : Cubes
                 ? VIn { &symm0, &symm1, &symm2 }
                 : VIn { &fixed };
         }
-        int64_t sprout_way4 (int n_slots, int progress_at, Have &hout,
-                             const Filter &filter, Pro64::Printer pp) const;
-        void sprout_way5 (int n_slots, int progress_at, Have &hout) const;
+        int64_t sprout (int, const Have&, const Filter&, Pro64::Printer);
+        void sprout_way5 (int n_slots, const Have &hin);
+        void show_result () const;
     };
 
     struct Want
@@ -173,6 +173,7 @@ struct PolyCube : Cubes
         int n_cells;
         int n_cells_final;
         bool progress;
+        void announce_expectations () const;
     };
     static inline Want want;
 
