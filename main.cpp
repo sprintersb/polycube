@@ -110,33 +110,6 @@ void derived_sequences ()
     }
 }
 
-void print_stat ()
-{
-    if (!Cubes::take_stat)
-        return;
-
-    // Stat about fraction of fast canonicalization.
-    const int64_t s0 = stat[STAT_FAIL];
-    const int64_t s1 = stat[STAT_SUCC];
-    const int64_t s2 = stat[STAT_COST_FAIL];
-    const int64_t s3 = stat[STAT_COST_SUCC];
-    auto tot = s0 + s1;
-    if (tot)
-    {
-        const double f0 = tot ? (double) s0 / tot : 0.0;
-        const double f1 = tot ? (double) s1 / tot : 0.0;
-        printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)",
-                s0, 100 * f0, s1, 100 * f1);
-        const double cf0 = s0 ? (double) s2 / s0 : 0.0;
-        const double cf1 = s1 ? (double) s3 / s1 : 0.0;
-        printf ("\t Cost factor: %.1f + %.1f = %.1f\n",
-                cf0, cf1, f0 * cf0 + f1 * cf1);
-    }
-    else
-        printf ("Cost factor: %.1f\n", 0. + gjl::hyperoctahedral_order(DIM));
-}
-
-
 int main_polycube (int argc, char *argv[])
 {
     check_sequences ();
@@ -147,7 +120,9 @@ int main_polycube (int argc, char *argv[])
     int level = 10;
     int extra_spice = 0;
     int leap = 1;
-    Cubes::take_stat = false;
+#ifdef DEBUG
+    Cubes::take_stat = true;
+#endif
 
     if (argc > 1)   sscanf (argv[1], "%i", &level);
     if (argc > 2)   sscanf (argv[2], "%i", &extra_spice);
@@ -220,8 +195,7 @@ int main_polycube (int argc, char *argv[])
         }
         else
         {
-            for (auto &s : stat)
-                s = 0;
+            Cubes::stat.reset ();
 
             want.leap = i == level && leap ? leap : 0;
             if (want.leap)
@@ -238,7 +212,8 @@ int main_polycube (int argc, char *argv[])
 
         have[i].show_result ();
 
-        print_stat ();
+        if (Cubes::take_stat)
+            Cubes::stat.print ();
 
         if (int ci = oeis::cubes_free (dim, i); ci >= 0)
             if (int ci1 = oeis::cubes_free (dim - 1, i); ci1 >= 0)

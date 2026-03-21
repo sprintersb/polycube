@@ -52,8 +52,6 @@ enum
     STAT_sentinel
 };
 
-inline std::array<std::atomic<int64_t>, STAT_sentinel> stat;
-
 struct Dist;
 using VertexValues = VertexTraits<int>;
 using DistPointers = VertexTraits<Dist*>;
@@ -365,6 +363,19 @@ public:
     }
     std::string ascii (char c = '*') const;
     friend std::ostream& operator << (std::ostream&, const Cubes&);
+
+    using StatBase = std::array<std::atomic<int64_t>, STAT_sentinel>;
+    struct Stat : StatBase
+    {
+        void reset ()
+        {
+            for (auto &a : *this)
+                a = 0;
+        }
+        void record_success (bool, int dim);
+        void print () const;
+    };
+    static inline Stat stat;
 };
 
 struct Cubes::Context

@@ -1,4 +1,5 @@
 #include <unordered_set>
+#include <cinttypes>
 // Own
 #include "cubes.h"
 #include "debug.h"
@@ -287,12 +288,7 @@ void Cubes::canonicalize ()
         cells = std::move (congruents<Cubes> (ctx.dim, 0).cells);
 
     if (Cubes::take_stat)
-    {
-        stat[success] += 1;
-        stat[2 + success] += success
-            ? VERTEX_CANONICALIZATION_COST + (ctx.dim != DIM)
-            : gjl::hyperoctahedral_order (ctx.dim) + (ctx.dim != DIM);
-    }
+        stat.record_success (success, ctx.dim);
 }
 
 // Find a canonical representation, and determine whether it is congruent
@@ -526,4 +522,37 @@ std::ostream& operator << (std::ostream &ost, const Cubes &c)
     for (Dim d : c)
         ost << " " << d;
     return ost << " }";
+}
+
+
+void Cubes::Stat::record_success (bool success, int dim)
+{
+    at (success) += 1;
+    at (2 + success) += success
+        ? VERTEX_CANONICALIZATION_COST + (dim != DIM)
+        : gjl::hyperoctahedral_order (dim) + (dim != DIM);
+}
+
+
+void Cubes::Stat::print () const
+{
+    // Stat about fraction of fast canonicalization.
+    const int64_t s0 = stat[STAT_FAIL];
+    const int64_t s1 = stat[STAT_SUCC];
+    const int64_t s2 = stat[STAT_COST_FAIL];
+    const int64_t s3 = stat[STAT_COST_SUCC];
+    auto tot = s0 + s1;
+    if (tot)
+    {
+        const double f0 = tot ? (double) s0 / tot : 0.0;
+        const double f1 = tot ? (double) s1 / tot : 0.0;
+        printf ("Stat: %" PRIi64 "(%.2f%%)  %" PRIi64 "(%.2f%%)",
+                s0, 100 * f0, s1, 100 * f1);
+        const double cf0 = s0 ? (double) s2 / s0 : 0.0;
+        const double cf1 = s1 ? (double) s3 / s1 : 0.0;
+        printf ("\t Cost factor: %.1f + %.1f = %.1f\n",
+                cf0, cf1, f0 * cf0 + f1 * cf1);
+    }
+    else
+        printf ("Cost factor: %.1f\n", 0. + gjl::hyperoctahedral_order (DIM));
 }
