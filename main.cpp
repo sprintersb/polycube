@@ -182,6 +182,7 @@ int main_polycube (int argc, char *argv[])
         auto &poly = have[i].corona_polynomial;
 
         want.announce_expectations ();
+        Cubes::stat.reset ();
 
         if (i == 1)
         {
@@ -195,8 +196,6 @@ int main_polycube (int argc, char *argv[])
         }
         else
         {
-            Cubes::stat.reset ();
-
             want.leap = i == level && leap ? leap : 0;
             if (want.leap)
                 want.free.cubes = want.fixed.cubes = false;

@@ -5,6 +5,12 @@
 #include "debug.h"
 #include "util.h"
 
+#ifdef DEBUG
+#define S(x) stat.record_canon (x)
+#else
+#define S(x) (void) 0
+#endif
+
 /////////////////////////////////////////////////////////////////////////////
 // Canonicalization
 
@@ -229,19 +235,19 @@ inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
 {
     const int max_value = pc[(1 << dim) - 1]->value;
     if (max_value != (1 << (dim - 1)) - 1)
-        return 0;
+        return S(4), 0;
     // # valuations are exacly half of HOh's symmetries, which is a
     // hallmark for mirror symmetry.
     const int symmetry = pc[0]->id ^ pc[1]->id;
     // For now, only consider simple reflections, i.e. symmetry has popcount 1.
     if (symmetry & (symmetry - 1))
-        return 0;
+        return S(5), 0;
     for (int i = 2; i < 1 << dim; i += 2)
         if ((pc[i]->id ^ pc[i + 1]->id) != symmetry)
-            return 0;
+            return S(6), 0;
     // All looks good until now, but we need a final proof.
     const int d = gjl::count_trailing_zeros (symmetry);
-    return matches_flipped (d, bbox) ? 2 : 0;
+    return matches_flipped (d, bbox) ? 2 : (S(7), 0);
 }
 
 // Size of the PolyCube's orbit in HOh.  Symmetry is known to be:
@@ -325,12 +331,7 @@ void Cubes::canonicalize (Symmetry &symmetry)
     }
 
     if (Cubes::take_stat)
-    {
-        stat[success] += 1;
-        stat[2 + success] += success
-            ? VERTEX_CANONICALIZATION_COST + (ctx.dim != DIM)
-            : gjl::hyperoctahedral_order (ctx.dim) + (ctx.dim != DIM);
-    }
+        stat.record_success (success, ctx.dim);
 }
 
 // On success:
@@ -383,10 +384,10 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     // Shortcut: When all vertex dists are different, we always succeed.
     if (max_value == (1 << dim) - 1)
         // Canonical: Use the vertex with the smallest valuation.
-        return ctx.vertex = pc[0]->id, ctx.symmetry = 1, true;
+        return S(1), ctx.vertex = pc[0]->id, ctx.symmetry = 1, true;
 
     if (find_symmetry (pc, ctx.bbox, dim))
-        return ctx.vertex = pc[0]->id, ctx.symmetry = 2, true;
+        return S(2), ctx.vertex = pc[0]->id, ctx.symmetry = 2, true;
 
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
@@ -397,15 +398,17 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
         good &= b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value;
         if (good && pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
             // Canonical: The vertex with the smallest unique valuation.
-            return ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
+            return S(3), ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
     }
-    return ctx.vertex = Vertex {}, ctx.symmetry = 0, false;
+    return S(0), ctx.vertex = Vertex {}, ctx.symmetry = 0, false;
 }
 
 inline bool Cubes::maybe_canonicalize_vertices (Context &ctx, bool same_parity)
 {
+    stat.take_canon = 1;
     if (canonical_vertex (ctx))
         canonicalize_vertices (ctx, same_parity);
+    stat.take_canon = 0;
     return !! ctx.vertex;
 }
 
@@ -527,20 +530,25 @@ std::ostream& operator << (std::ostream &ost, const Cubes &c)
 
 void Cubes::Stat::record_success (bool success, int dim)
 {
-    at (success) += 1;
-    at (2 + success) += success
+    n_succ[success] += 1;
+    n_succ[2 + success] += success
         ? VERTEX_CANONICALIZATION_COST + (dim != DIM)
         : gjl::hyperoctahedral_order (dim) + (dim != DIM);
 }
 
+inline void Cubes::Stat::record_canon (int id)
+{
+    n_canon[id] += 1;
+}
 
 void Cubes::Stat::print () const
 {
+    enum { STAT_FAIL, STAT_SUCC, STAT_COST_FAIL, STAT_COST_SUCC };
     // Stat about fraction of fast canonicalization.
-    const int64_t s0 = stat[STAT_FAIL];
-    const int64_t s1 = stat[STAT_SUCC];
-    const int64_t s2 = stat[STAT_COST_FAIL];
-    const int64_t s3 = stat[STAT_COST_SUCC];
+    const int64_t s0 = n_succ[STAT_FAIL];
+    const int64_t s1 = n_succ[STAT_SUCC];
+    const int64_t s2 = n_succ[STAT_COST_FAIL];
+    const int64_t s3 = n_succ[STAT_COST_SUCC];
     auto tot = s0 + s1;
     if (tot)
     {
@@ -555,4 +563,19 @@ void Cubes::Stat::print () const
     }
     else
         printf ("Cost factor: %.1f\n", 0. + gjl::hyperoctahedral_order (DIM));
+
+    int64_t ss = 0;
+    for (int i = 0; i < 4; ++i)
+        ss += n_canon[i];
+    if (ss)
+    {
+        std::vector<double> dd (n_canon.size());
+        for (size_t i = 0; i < n_canon.size (); ++i)
+            dd[i] = 100.0 * n_canon[i] / ss;
+        //double d0 = n_canon[0] / s;
+        printf ("Cano: %.1f%% / %.1f%% / %.1f%% / %.1f%%"
+                " ; %.1f%% / %.1f%% / %.1f%% / %.1f%%\n",
+                dd[0], dd[1], dd[2], dd[3],
+                dd[4], dd[5], dd[6], dd[7]);
+    }
 }

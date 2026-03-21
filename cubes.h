@@ -46,12 +46,6 @@
 // step of traversing the hyperoctahedral group.  For stats only.
 #define VERTEX_CANONICALIZATION_COST 4
 
-enum
-{
-    STAT_FAIL, STAT_SUCC, STAT_COST_FAIL, STAT_COST_SUCC,
-    STAT_sentinel
-};
-
 struct Dist;
 using VertexValues = VertexTraits<int>;
 using DistPointers = VertexTraits<Dist*>;
@@ -364,15 +358,24 @@ public:
     std::string ascii (char c = '*') const;
     friend std::ostream& operator << (std::ostream&, const Cubes&);
 
-    using StatBase = std::array<std::atomic<int64_t>, STAT_sentinel>;
-    struct Stat : StatBase
+    struct Stat
     {
+        bool take_canon;
+        std::array<std::atomic<int64_t>, 4> n_succ;
+        std::array<std::atomic<int64_t>, 8> n_canon;
+        Stat () : take_canon(0)
+        {
+            reset ();
+        }
         void reset ()
         {
-            for (auto &a : *this)
+            for (auto &a : n_succ)
+                a = 0;
+            for (auto &a : n_canon)
                 a = 0;
         }
         void record_success (bool, int dim);
+        void record_canon (int id);
         void print () const;
     };
     static inline Stat stat;
