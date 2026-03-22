@@ -294,6 +294,32 @@ private:
             d.set (b, ia);
         }
     }
+    bool matches_swapped (int a, int b) const
+    {
+        for (Dim d : *this)
+        {
+            const int ia = d[a];
+            const int ib = d[b];
+            d.set (a, ib);
+            d.set (b, ia);
+            if (! contains (d))
+                return false;
+        }
+        return true;
+    }
+    bool matches_flipped_swapped (int a, int b, int hi_ab) const
+    {
+        for (Dim d : *this)
+        {
+            const int ia = d[a];
+            const int ib = d[b];
+            d.set (a, hi_ab - ib);
+            d.set (b, hi_ab - ia);
+            if (! contains (d))
+                return false;
+        }
+        return true;
+    }
     bool matches_flipped (int dim) const
     {
         return matches_flipped (dim, max_coord (dim));
@@ -312,6 +338,7 @@ private:
         }
         return true;
     }
+    bool is_diagonal_symmetric (int, int, const Context&) const;
 public:
     void canonicalize ();
     void canonicalize (Symmetry &symmetry);
@@ -335,6 +362,8 @@ private:
     bool maybe_canonicalize_vertices (Context&, bool same_parity = false);
     void canonicalize_vertices (Context&, bool);
     Symmetry find_symmetry (const DistPointers&, const Box&, int) const;
+    Symmetry find_diag_symmetry (const DistPointers&, const Context&) const;
+    static int uniquely_valued (const DistPointers&, int dim);
 public:
     Box bounding_box () const
     {
@@ -362,7 +391,7 @@ public:
     {
         bool take_canon;
         std::array<std::atomic<int64_t>, 4> n_succ;
-        std::array<std::atomic<int64_t>, 8> n_canon;
+        std::array<std::atomic<int64_t>, 5> n_canon;
         Stat () : take_canon(0)
         {
             reset ();

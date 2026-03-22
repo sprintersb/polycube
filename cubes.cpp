@@ -235,19 +235,67 @@ inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
 {
     const int max_value = pc[(1 << dim) - 1]->value;
     if (max_value != (1 << (dim - 1)) - 1)
-        return S(4), 0;
+        return 0;
     // # valuations are exacly half of HOh's symmetries, which is a
     // hallmark for mirror symmetry.
     const int symmetry = pc[0]->id ^ pc[1]->id;
     // For now, only consider simple reflections, i.e. symmetry has popcount 1.
     if (symmetry & (symmetry - 1))
-        return S(5), 0;
+        return 0;
     for (int i = 2; i < 1 << dim; i += 2)
         if ((pc[i]->id ^ pc[i + 1]->id) != symmetry)
-            return S(6), 0;
+            return 0;
     // All looks good until now, but we need a final proof.
     const int d = gjl::count_trailing_zeros (symmetry);
-    return matches_flipped (d, bbox) ? 2 : (S(7), 0);
+    return matches_flipped (d, bbox) ? 2 : 0;
+}
+
+// Return 2 (diagonal symmetry) or 0 (unknown symmetry).
+inline bool Cubes::is_diagonal_symmetric (int id1, int id2,
+                                          const Context &ctx) const
+{
+    const int ix = id1 ^ id2;
+    // Avoiding popcount.
+    const int ix1 = ix & (ix - 1); // ix without LSB.
+    const int ix2 = ix1 & (ix1 - 1); // ix without 2 LSBs.
+    // id1 and id2 should differ in exactly 2 bits for this kind of symmetry:
+    // Fail if popcount (ix) != 2.
+    if (ix1 == 0 || ix2 != 0)
+        return false;
+    // id1 and id2 differ in two bits, and we have two symmetry cases:
+    // *0*1* <-> *1*0* = reflection at main diagonal y = x.
+    // *0*0* <-> *1*1* = reflection at minor diagonal y = hi - x.
+    const int a = gjl::count_trailing_zeros (ix);
+    const int b = gjl::count_trailing_zeros (ix1);
+    const int hi = ctx.bbox.hi[a];
+    if (hi == ctx.bbox.hi[b])
+        return id2 == (id1 | ix) // Notice that id2 > id1.
+            // Reflect at minor diagonal.
+            ? matches_flipped_swapped (a, b, hi)
+            // Reflect at main diagonal: Swap coordinates a <-> b.
+            : matches_swapped (a, b);
+    return false;
+}
+
+inline auto Cubes::find_diag_symmetry (const DistPointers &pc,
+                                       const Context &ctx) const -> Symmetry
+{
+    const int dim = ctx.dim;
+    const int max_value = pc[(1 << dim) - 1]->value;
+    // Only 75% of possible colors is a hallmark of diagonal symmetry.
+    // These are the diagonal symmetries of the square together with
+    // higher dimensional versions thereof.
+    if (dim >= 2 && max_value == (1 << dim) - (1 << dim) / 4 - 1)
+        // Find 2 vertices of same color.
+        for (int i = 1; i < 1 << dim; ++i)
+            if (pc[i]->value == pc[i - 1]->value)
+            {
+                // Any vertex pair with like colors determines the symmetry.
+                const int id1 = std::min (pc[i - 1]->id, pc[i]->id);
+                const int id2 = std::max (pc[i - 1]->id, pc[i]->id);
+                return is_diagonal_symmetric (id1, id2, ctx) ? 2 : 0;
+            }
+    return 0;
 }
 
 // Size of the PolyCube's orbit in HOh.  Symmetry is known to be:
@@ -334,6 +382,16 @@ void Cubes::canonicalize (Symmetry &symmetry)
         stat.record_success (success, ctx.dim);
 }
 
+// Return the smallest index in pc[] (if any) that points to a unique color.
+inline int Cubes::uniquely_valued (const DistPointers &pc, int dim)
+{
+    for (int b = 0; b < 1 << dim; ++b)
+        if (b == 0 || pc[b]->value > pc[b - 1]->value)
+            if (b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value)
+                return b;
+    return -1;
+}
+
 // On success:
 // 1) Set ctx.vertex to the id of a canonical vertex in [0, 2^DIM),
 // 2) Set ctx.vvs[id] to the values / colors assigned to the 2^DIM vertices,
@@ -389,17 +447,22 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     if (find_symmetry (pc, ctx.bbox, dim))
         return S(2), ctx.vertex = pc[0]->id, ctx.symmetry = 2, true;
 
+    if (find_diag_symmetry (pc, ctx))
+    {
+        // Canonical: Use the smallest vertex with a unique color.
+        // Neighbors are uniquely sortable (modulo diag symmetry).
+        const int b = uniquely_valued (pc, dim);
+        Assert (b >= 0, "id must exist");
+        return S(3), ctx.vertex = pc[b]->id, ctx.symmetry = 2, true;
+    }
+
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
-    for (int b = 0; b < 1 << dim; ++b)
-    {
-        bool good = true;
-        good &= b == 0              || pc[b]->value > pc[b - 1]->value;
-        good &= b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value;
-        if (good && pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
-            // Canonical: The vertex with the smallest unique valuation.
-            return S(3), ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
-    }
+    const int b = uniquely_valued (pc, dim);
+    if (b >= 0 && pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
+        // Canonical: The vertex with the smallest unique valuation.
+        return S(4), ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
+
     return S(0), ctx.vertex = Vertex {}, ctx.symmetry = 0, false;
 }
 
@@ -445,6 +508,8 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
         todo |= (uint64_t) 1 << vvs[1 << b];
     // Vertex 0 has dim neighbors, canonicalize them such that higher
     // dimension neighbors get higher vertex values.
+    // !!! Notice that this works as expected even in the case of main
+    // !!! diagonal symmetry where exactly two neighbors have like colors.
     for (int d = 0; d < dim - 1; ++d, todo &= todo - 1)
     {
         Assert (todo, "bad 'todo' popcount");
@@ -538,7 +603,7 @@ void Cubes::Stat::record_success (bool success, int dim)
 
 inline void Cubes::Stat::record_canon (int id)
 {
-    n_canon[id] += 1;
+    n_canon.at (id) += 1;
 }
 
 void Cubes::Stat::print () const
@@ -565,17 +630,14 @@ void Cubes::Stat::print () const
         printf ("Cost factor: %.1f\n", 0. + gjl::hyperoctahedral_order (DIM));
 
     int64_t ss = 0;
-    for (int i = 0; i < 4; ++i)
-        ss += n_canon[i];
+    for (auto &a : n_canon)
+        ss += a;
     if (ss)
     {
         std::vector<double> dd (n_canon.size());
         for (size_t i = 0; i < n_canon.size (); ++i)
             dd[i] = 100.0 * n_canon[i] / ss;
-        //double d0 = n_canon[0] / s;
-        printf ("Cano: %.1f%% / %.1f%% / %.1f%% / %.1f%%"
-                " ; %.1f%% / %.1f%% / %.1f%% / %.1f%%\n",
-                dd[0], dd[1], dd[2], dd[3],
-                dd[4], dd[5], dd[6], dd[7]);
+        printf ("Cano: %.1f%% / %.1f%% + %.1f%% / %.1f%% + %.1f%%\n",
+                dd[0], dd[1], dd[4], dd[2], dd[3]);
     }
 }
