@@ -315,7 +315,6 @@ int Cubes::multiplicity (Symmetry symmetry) const
     if (DIM >= 3)
     {
         Cubes c (*this);
-        ctx.bbox = c.bounding_box ();
         ctx.dim = std::max (1, c.squeeze (ctx.bbox));
         if (ctx.dim == DIM - 1 && c.canonical_vertex (ctx))
             return DIM * (gjl::hyperoctahedral_order (ctx.dim) / ctx.symmetry);
@@ -460,8 +459,7 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
 
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
-    const int b = uniquely_valued (pc, dim, true, ctx);
-    if (b >= 0)
+    if (const int b = uniquely_valued (pc, dim, true, ctx); b >= 0)
         // Canonical: The vertex with the smallest unique valuation.
         return S(4), ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
 
