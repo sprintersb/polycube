@@ -363,7 +363,7 @@ private:
     void canonicalize_vertices (Context&, bool);
     Symmetry find_symmetry (const DistPointers&, const Box&, int) const;
     Symmetry find_diag_symmetry (const DistPointers&, const Context&) const;
-    static int uniquely_valued (const DistPointers&, int dim);
+    static int uniquely_valued (const DistPointers&, int, bool, const Context&);
 public:
     Box bounding_box () const
     {

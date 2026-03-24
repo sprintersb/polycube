@@ -383,12 +383,14 @@ void Cubes::canonicalize (Symmetry &symmetry)
 }
 
 // Return the smallest index in pc[] (if any) that points to a unique color.
-inline int Cubes::uniquely_valued (const DistPointers &pc, int dim)
+inline int Cubes::uniquely_valued (const DistPointers &pc, int dim, bool flt,
+                                   const Context &ctx)
 {
     for (int b = 0; b < 1 << dim; ++b)
         if (b == 0 || pc[b]->value > pc[b - 1]->value)
             if (b == (1 << dim) - 1 || pc[b]->value < pc[b + 1]->value)
-                return b;
+                if (! flt || pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
+                    return b;
     return -1;
 }
 
@@ -451,15 +453,15 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
     {
         // Canonical: Use the smallest vertex with a unique color.
         // Neighbors are uniquely sortable (modulo diag symmetry).
-        const int b = uniquely_valued (pc, dim);
+        const int b = uniquely_valued (pc, dim, false, ctx);
         Assert (b >= 0, "id must exist");
         return S(3), ctx.vertex = pc[b]->id, ctx.symmetry = 2, true;
     }
 
     // Now most likely we see a Cubes with some symmetry, but in up
     // to 10% of cases we succeed by looking a bit more closely.
-    const int b = uniquely_valued (pc, dim);
-    if (b >= 0 && pc[b]->neighbors_uniquely_sortable (ctx.vvs, dim))
+    const int b = uniquely_valued (pc, dim, true, ctx);
+    if (b >= 0)
         // Canonical: The vertex with the smallest unique valuation.
         return S(4), ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
 
