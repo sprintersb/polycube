@@ -42,6 +42,12 @@
 #define BINARY_ADD_THRESHOLD 10
 #endif
 
+// For sizes from BINARY_SEARCH_THRESHOLD on, Cubes::contains() uses a
+// binary search.  For sizes below that, a linear search is used.
+#ifndef BINARY_SEARCH_THRESHOLD
+#define BINARY_SEARCH_THRESHOLD 10
+#endif
+
 // The relative cost of a vertex canonicalization compared to one
 // step of traversing the hyperoctahedral group.  For stats only.
 #define VERTEX_CANONICALIZATION_COST 4
@@ -126,14 +132,35 @@ public:
             h = Hasher::add (h, d.ival());
         return h;
     }
-    bool contains (Dim d) const
+    bool contains_search_binary (Dim d) const
+    {
+        int l = 0;
+        for (int r = size (); r > l; )
+        {
+            const int m = (l + r) >> 1;
+            if (int i = d.cmp (cells[m]); i > 0)
+                l = m + 1;
+            else if (i < 0)
+                r = m;
+            else
+                return true;
+        }
+        return false;
+    }
+    bool contains_search_linear (Dim d) const
     {
         for (Dim c : cells)
-            if (int i = c.cmp (d); i == 0)
+            if (const int i = c.cmp (d); i == 0)
                 return true;
             else if (i > 0)
                 break;
         return false;
+    }
+    bool contains (Dim d) const
+    {
+        return size () >= BINARY_SEARCH_THRESHOLD
+            ? contains_search_binary (d)
+            : contains_search_linear (d);
     }
     void add_search_linear (Dim d)
     {
