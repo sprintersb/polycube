@@ -255,18 +255,14 @@ inline bool Cubes::is_diagonal_symmetric (int id1, int id2,
                                           const Context &ctx) const
 {
     const int ix = id1 ^ id2;
-    // Avoiding popcount.
-    const int ix1 = ix & (ix - 1); // ix without LSB.
-    const int ix2 = ix1 & (ix1 - 1); // ix without 2 LSBs.
     // id1 and id2 should differ in exactly 2 bits for this kind of symmetry:
     // Fail if popcount (ix) != 2.
-    if (ix1 == 0 || ix2 != 0)
+    int a, b;
+    if (! gjl::popcount2_bits (ix, a, b))
         return false;
     // id1 and id2 differ in two bits, and we have two symmetry cases:
     // *0*1* <-> *1*0* = reflection at main diagonal y = x.
     // *0*0* <-> *1*1* = reflection at minor diagonal y = hi - x.
-    const int a = gjl::count_trailing_zeros (ix);
-    const int b = gjl::count_trailing_zeros (ix1);
     const int hi = ctx.bbox.hi[a];
     if (hi == ctx.bbox.hi[b])
         return id2 == (id1 | ix) // Notice that id2 > id1.

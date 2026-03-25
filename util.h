@@ -83,6 +83,18 @@ namespace gjl
     template<> constexpr inline int popcount (long long t) { return __builtin_popcountll (t); }
     template<> constexpr inline int popcount (unsigned long long t) { return __builtin_popcountll (t); }
 
+    // When t0 has a popcount of 2, then return the LSB and MSB bit positions.
+    template <typename T>
+    constexpr inline bool popcount2_bits (T t0, int &lsb, int &msb)
+    {
+        const T t1 = t0 & (t0 - 1);
+        const T t2 = t1 & (t1 - 1);
+        if (! t1 || t2)
+            return false;
+        lsb = gjl::count_trailing_zeros (t0);
+        msb = gjl::count_trailing_zeros (t1);
+        return true;
+    }
 }; // gjl
 
 #endif // UTIL_H
