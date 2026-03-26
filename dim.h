@@ -408,14 +408,10 @@ public:
     auto end ()   const { return cend (); }
     void insert (const iterator &it, Dim d)
     {
-        const int pos = (int) (& (*it) - & a_[0]);
+        const int pos [[maybe_unused]] = (int) (& (*it) - & a_[0]);
         Assert (pos >= 0 && pos <= size (), "bad insert position %d", pos);
         const auto n_bytes = (const uint8_t*) &*end() - (const uint8_t*) &*it;
-        if (n_bytes < 16)
-            for (int i = size (); i > pos; --i)
-                a_[i] = a_[i - 1];
-        else
-            std::memmove (&*(it + 1), &*it, n_bytes);
+        std::memmove (&*(it + 1), &*it, n_bytes);
         *it = d;
         set_size (1 + size ());
     }
