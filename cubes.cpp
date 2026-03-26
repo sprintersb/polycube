@@ -229,28 +229,30 @@ private:
 #endif
 };
 
-// Return 2 (mirror symmetry) or 0 (unknown symmetry).
-inline auto Cubes::find_symmetry (const DistPointers &pc, const Box &bbox,
-                                  int dim) const -> Symmetry
+// Return true when there is a  vertex <-> vertex XOR s  mirror symmetry,
+// where s does not depend on the vertex, and where the index in the
+// hyperoctahedral group is 2.  Vertex pairs have different colors.
+inline bool Cubes::is_flip_symmetric (const DistPointers &pc,
+                                      const Context &ctx) const
 {
+    const int dim = ctx.dim;
     const int max_value = pc[(1 << dim) - 1]->value;
     if (max_value != (1 << (dim - 1)) - 1)
-        return 0;
+        return false;
     // # valuations are exacly half of HOh's symmetries, which is a
     // hallmark for mirror symmetry.
     const int symmetry = pc[0]->id ^ pc[1]->id;
     // For now, only consider simple reflections, i.e. symmetry has popcount 1.
     if (symmetry & (symmetry - 1))
-        return 0;
+        return false;
     for (int i = 2; i < 1 << dim; i += 2)
         if ((pc[i]->id ^ pc[i + 1]->id) != symmetry)
-            return 0;
+            return false;
     // All looks good until now, but we need a final proof.
     const int d = gjl::count_trailing_zeros (symmetry);
-    return matches_flipped (d, bbox) ? 2 : 0;
+    return matches_flipped (d, ctx.bbox);
 }
 
-// Return 2 (diagonal symmetry) or 0 (unknown symmetry).
 inline bool Cubes::is_diagonal_symmetric (int id1, int id2,
                                           const Context &ctx) const
 {
@@ -266,15 +268,19 @@ inline bool Cubes::is_diagonal_symmetric (int id1, int id2,
     const int hi = ctx.bbox.hi[a];
     if (hi == ctx.bbox.hi[b])
         return id2 == (id1 | ix) // Notice that id2 > id1.
-            // Reflect at minor diagonal.
+            // Reflect at minor diagonal: (a, b) -> (hi - b, hi - a).
             ? matches_flipped_swapped (a, b, hi)
-            // Reflect at main diagonal: Swap coordinates a <-> b.
+            // Reflect at main diagonal: Swap dimesions a <-> b.
             : matches_swapped (a, b);
     return false;
 }
 
-inline auto Cubes::find_diag_symmetry (const DistPointers &pc,
-                                       const Context &ctx) const -> Symmetry
+// Return true when there is a diagonal symmetry that has index 2 in the
+// hyperoctahedral group.  These are the diagonal symmetries of the square
+// together with higher dimensional versions thereof.  Half of the vertices
+// lie in the symmetry plain, and all of them have a different color.
+inline bool Cubes::is_diagonal_symmetric (const DistPointers &pc,
+                                          const Context &ctx) const
 {
     const int dim = ctx.dim;
     const int max_value = pc[(1 << dim) - 1]->value;
@@ -289,9 +295,9 @@ inline auto Cubes::find_diag_symmetry (const DistPointers &pc,
                 // Any vertex pair with like colors determines the symmetry.
                 const int id1 = std::min (pc[i - 1]->id, pc[i]->id);
                 const int id2 = std::max (pc[i - 1]->id, pc[i]->id);
-                return is_diagonal_symmetric (id1, id2, ctx) ? 2 : 0;
+                return is_diagonal_symmetric (id1, id2, ctx);
             }
-    return 0;
+    return false;
 }
 
 // Size of the PolyCube's orbit in HOh.  Symmetry is known to be:
@@ -441,10 +447,12 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
         // Canonical: Use the vertex with the smallest valuation.
         return S(1), ctx.vertex = pc[0]->id, ctx.symmetry = 1, true;
 
-    if (find_symmetry (pc, ctx.bbox, dim))
+    if (is_flip_symmetric (pc, ctx))
+        // Canonical: Use a vertex of smallest color.  Due to symmetry it does
+        // not matter which one.  Notice that neighbors are uniquely sortable.
         return S(2), ctx.vertex = pc[0]->id, ctx.symmetry = 2, true;
 
-    if (find_diag_symmetry (pc, ctx))
+    if (is_diagonal_symmetric (pc, ctx))
     {
         // Canonical: Use the smallest vertex with a unique color.
         // Neighbors are uniquely sortable (modulo diag symmetry).

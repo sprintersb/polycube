@@ -365,7 +365,6 @@ private:
         }
         return true;
     }
-    bool is_diagonal_symmetric (int, int, const Context&) const;
 public:
     void canonicalize ();
     void canonicalize (Symmetry &symmetry);
@@ -388,8 +387,9 @@ private:
     bool canonical_vertex (Context&) const;
     bool maybe_canonicalize_vertices (Context&, bool same_parity = false);
     void canonicalize_vertices (Context&, bool);
-    Symmetry find_symmetry (const DistPointers&, const Box&, int) const;
-    Symmetry find_diag_symmetry (const DistPointers&, const Context&) const;
+    bool is_flip_symmetric (const DistPointers&, const Context&) const;
+    bool is_diagonal_symmetric (const DistPointers&, const Context&) const;
+    bool is_diagonal_symmetric (int, int, const Context&) const;
     static int uniquely_valued (const DistPointers&, int, bool, const Context&);
 public:
     Box bounding_box () const
