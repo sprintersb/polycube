@@ -83,7 +83,7 @@ inline T Cubes::congruents (int dim, bool same_parity) const
 // are all below MAX_DIAGONAL_LENGTH (in Manhattan metric).
 // This struct is in the hot path, so we use a managed std::array instead
 // of a more dynamic container like std::vector or std::map.
-using DistBase = std::array<int16_t, 1 + MAX_DIAGONAL_LENGTH>;
+using DistBase = std::array<int32_t, 1 + MAX_DIAGONAL_LENGTH>;
 struct Dist : DistBase
 {
     int id = -1;
