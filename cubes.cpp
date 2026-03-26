@@ -255,10 +255,10 @@ inline bool Cubes::is_diagonal_symmetric (int id1, int id2,
     // *0*0* <-> *1*1* = reflection at minor diagonal y = hi - x.
     const int hi = ctx.bbox.hi[a];
     if (hi == ctx.bbox.hi[b])
-        return id2 == (id1 | ix) // Notice that id2 > id1.
-            // Reflect at minor diagonal: (a, b) -> (hi - b, hi - a).
+        return std::abs (id2 - id1) == ix
+            // Minor diagonal symmetry: (a, b) -> (hi - b, hi - a).
             ? matches_flipped_swapped (a, b, hi)
-            // Reflect at main diagonal: Swap dimesions a <-> b.
+            // Main diagonal symmetry: a <-> b.
             : matches_swapped (a, b);
     return false;
 }
@@ -279,12 +279,8 @@ inline bool Cubes::is_diagonal_symmetric (const DistPointers &pc,
         // Find 2 vertices of same color.
         for (int i = 1; i < 1 << dim; ++i)
             if (pc[i]->value == pc[i - 1]->value)
-            {
                 // Any vertex pair with like colors determines the symmetry.
-                const int id1 = std::min (pc[i - 1]->id, pc[i]->id);
-                const int id2 = std::max (pc[i - 1]->id, pc[i]->id);
-                return is_diagonal_symmetric (id1, id2, ctx);
-            }
+                return is_diagonal_symmetric (pc[i - 1]->id, pc[i]->id, ctx);
     return false;
 }
 
