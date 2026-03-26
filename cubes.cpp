@@ -25,23 +25,15 @@
 template<typename T>
 inline T Cubes::congruents (int dim, bool same_parity) const
 {
-    Assert (dim >= 1 && dim <= DIM, "todo: canonicalization in DIM %d", DIM);
+    Assert (dim >= 1 && dim <= 6, "todo: canonicalization in DIM %d", DIM);
+    static const std::array<const char*, 1 + 6> Ms =
+    {
+        "", "0", M2 "0" M2, M3 "0" M3, M4 "0" M4, M5 "0" M5, M6 "0" M6
+    };
     Cubes c (*this);
     CongruentsAspect<T> aspect;
     aspect.insert (c);
-    const char *S = "?";
-    switch (dim)
-    {
-        case 1: S = "0"; break;
-        case 2: S = M2 "0" M2; break;
-        case 3: S = M3 "0" M3; break;
-        case 4: S = M4 "0" M4; break;
-        case 5: S = M5 "0" M5; break;
-        case 6: S = M6 "0" M6; break;
-        default:
-            unreachable ("todo: canonicalize in DIM %d", DIM);
-    }
-    for (auto s = S; *s && !aspect.ready(); ++s)
+    for (auto s = Ms[dim]; *s && !aspect.ready(); ++s)
         switch (*s)
         {
             default: unreachable ("todo: implement char '%c' (0x%x)", *s, *s);
