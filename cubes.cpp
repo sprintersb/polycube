@@ -5,11 +5,7 @@
 #include "debug.h"
 #include "util.h"
 
-#ifdef DEBUG
 #define S(x) stat.record_canon (x)
-#else
-#define S(x) (void) 0
-#endif
 
 /////////////////////////////////////////////////////////////////////////////
 // Canonicalization
@@ -605,9 +601,11 @@ void Cubes::Stat::record_success (bool success, int dim)
         : gjl::hyperoctahedral_order (dim) + (dim != DIM);
 }
 
-inline void Cubes::Stat::record_canon (int id)
+inline void Cubes::Stat::record_canon (int id [[maybe_unused]])
 {
+#ifdef DEBUG
     n_canon.at (id) += 1;
+#endif
 }
 
 void Cubes::Stat::print () const
