@@ -162,7 +162,7 @@ struct Cubes::CongruentsAspect<Cubes>
     const Cubes& value () const { return min_cubes; }
     void insert (const Cubes &c)
     {
-        if (min_cubes.size () == 0 || c < min_cubes)
+        if (c < min_cubes)
             min_cubes = c;
     }
     bool ready () const { return false; }

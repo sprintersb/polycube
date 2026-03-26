@@ -100,7 +100,7 @@ public:
     int cmp (const Cubes &r) const
     {
         if (size () != r.size ())
-            return size () - r.size ();
+            return r.size () - size ();
         auto p2 = r.cells.begin ();
         for (Dim d : cells)
             if (const int i = d.cmp (*p2); i != 0)
