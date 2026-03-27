@@ -100,7 +100,7 @@ struct Dist : DistBase
     {
         if (size () != r.size ())
             return size () - r.size ();
-        for (int i = 0; i < size (); ++i)
+        for (int i = size () - 1; i >= 0; --i)
             if (at (i) != r.at (i))
                 return at (i) - r.at (i);
         return 0;
