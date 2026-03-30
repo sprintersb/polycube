@@ -33,13 +33,13 @@
 // For sizes from SORT_THRESHOLD on, garbled cells are sorted with std::sort.
 // For sizes below, sorting is achieved by re-building the cells.
 #ifndef SORT_THRESHOLD
-#define SORT_THRESHOLD 11
+#define SORT_THRESHOLD 10
 #endif
 
 // For sizes from BINARY_ADD_THRESHOLD on the insert position is determined
 // by a binary search.  For sizes below a linear search is used.
 #ifndef BINARY_ADD_THRESHOLD
-#define BINARY_ADD_THRESHOLD 10
+#define BINARY_ADD_THRESHOLD 9
 #endif
 
 // For sizes from BINARY_SEARCH_THRESHOLD on, Cubes::contains() uses a
