@@ -472,7 +472,7 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
     const int dim = ctx.dim;
     VertexValues &vvs = ctx.vvs;
 
-    bool garbled = false;
+    bool scrambled = false;
     bool parity = 0;
     Assert (vvs.size () == 1 << DIM, "a %dd cube has %d vertices, not %zd",
             DIM, 1 << DIM, vvs.size ());
@@ -482,7 +482,7 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
     {
         p2.flip (id, ctx.bbox);
         parity = gjl::popcount (id);
-        garbled = true;
+        scrambled = true;
         // Adjust vvs accordingly.
         for (int b = 0; b < 1 << dim; ++b)
             if (b > (b ^ id))
@@ -512,7 +512,7 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
                 // Make vertex b the next neighbor of vertex 0.
                 p2.swap (d, b);
                 parity ^= 1;
-                garbled = true;
+                scrambled = true;
                 // Adjust vvs accordingly.
                 for (int i = 0; i < dim; ++i)
                 {
@@ -533,23 +533,9 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
     }
     // Now p2 has canonical cublis, but swapping and flipping
     // clobbered cublis' order.  Re-construct a proper one.
-    if (size () < SORT_THRESHOLD)
-    {
-        if (garbled)
-        {
-            cells.clear ();
-            for (Dim d : p2)
-                add (d, 0);
-        }
-        else
-            cells = std::move (p2.cells);
-    }
-    else
-    {
-        cells = std::move (p2.cells);
-        if (garbled)
-            sort ();
-    }
+    cells = std::move (p2.cells);
+    if (scrambled)
+        sort ();
 }
 
 

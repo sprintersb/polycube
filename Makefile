@@ -84,7 +84,6 @@ config-dim.h: force
 	$(call def_val,CELLS,$@.in)
 	$(call def_if,CUBES_VECT,$@.in)
 	$(call def_val,MAX_DIAGONAL_LENGTH,$@.in)
-	$(call def_val,SORT_THRESHOLD,$@.in)
 	./move-if-change $@.in $@
 	@cat $@
 

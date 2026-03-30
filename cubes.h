@@ -30,12 +30,6 @@
 #endif
 #endif // MAX_DIAGONAL_LENGTH
 
-// For sizes from SORT_THRESHOLD on, garbled cells are sorted with std::sort.
-// For sizes below, sorting is achieved by re-building the cells.
-#ifndef SORT_THRESHOLD
-#define SORT_THRESHOLD 10
-#endif
-
 // For sizes from BINARY_ADD_THRESHOLD on the insert position is determined
 // by a binary search.  For sizes below a linear search is used.
 #ifndef BINARY_ADD_THRESHOLD
@@ -225,28 +219,13 @@ public:
     Cubes& rotate (int i, int j)
     {
         const int xm = max_coord (i);
-        if (size () < SORT_THRESHOLD)
+        for (Dim &d : cells)
         {
-            Cubes c;
-            for (Dim d : cells)
-            {
-                const int y = xm - d[i];
-                d.set (i, d[j]);
-                d.set (j, y);
-                c.add (d, 0);
-            }
-            cells = std::move (c.cells);
+            const int y = xm - d[i];
+            d.set (i, d[j]);
+            d.set (j, y);
         }
-        else
-        {
-            for (Dim &d : cells)
-            {
-                const int y = xm - d[i];
-                d.set (i, d[j]);
-                d.set (j, y);
-            }
-            sort ();
-        }
+        sort ();
         return *this;
     }
     Cubes mirrored (int i) const
