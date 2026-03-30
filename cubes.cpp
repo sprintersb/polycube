@@ -539,7 +539,7 @@ inline void Cubes::canonicalize_vertices (Context &ctx, bool same_parity)
         {
             cells.clear ();
             for (Dim d : p2)
-                add (d);
+                add (d, 0);
         }
         else
             cells = std::move (p2.cells);

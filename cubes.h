@@ -85,12 +85,12 @@ public:
     Cubes (const std::initializer_list<Dim> &il)
     {
         for (Dim d : il)
-            add (d);
+            add (d, 1);
     }
     Cubes (const Cubes &dad, Dim d)
     {
         cells = dad.cells;
-        add (d);
+        add (d, 1);
     }
 
     int size () const
@@ -188,19 +188,19 @@ public:
         }
         cells.insert (cells.begin() + l, d);
     }
-    void add (Dim d)
+    void add (Dim d, bool normalize)
     {
         if (size () >= BINARY_ADD_THRESHOLD)
             add_search_binary (d);
         else
             add_search_linear (d);
-        // Normalize again.  Max one component of d is negative.
-        for (int j = 0; j < d.size (); ++j)
-            if (d.v[j] < 0)
-            {
-                shift (j, -d.v[j]);
-                break;
-            }
+        // Normalize again.  At most one component of d is -1.
+        if (normalize)
+            if (auto lt0 = d.v < Dim::all0; (Dim::int_t) lt0)
+                for (Dim &c : cells)
+                    // Notice that shifting is compatible with Dim.cmp(),
+                    // hence order will be retained.
+                    c.v -= lt0;
     }
     // Notice that shift() is compatible with Dim.cmp(), hence
     // order will be retained.
@@ -233,7 +233,7 @@ public:
                 const int y = xm - d[i];
                 d.set (i, d[j]);
                 d.set (j, y);
-                c.add (d);
+                c.add (d, 0);
             }
             cells = std::move (c.cells);
         }
@@ -256,7 +256,7 @@ public:
         for (Dim d : cells)
         {
             d.set (i, m - d[i]);
-            c.add (d);
+            c.add (d, 0);
         }
         return c;
     }
