@@ -284,6 +284,17 @@ inline bool Cubes::is_diagonal_symmetric (const DistPointers &pc,
     return false;
 }
 
+inline bool Cubes::is_rot_symmetric (const DistPointers &pc,
+                                     const Context &ctx) const
+{
+    const int dim = ctx.dim;
+    const int max_value = pc[(1 << dim) - 1]->value;
+    if (max_value != (1 << (dim - 1)) - 1)
+        return false;
+    S(5);
+    return false;
+}
+
 // Size of the PolyCube's orbit in HOh.  Symmetry is known to be:
 // 2) Mirror symmetric, i.e. multiplicity <= #HOh / 2,
 // 1) Asymmetric, i.e. multiplicity = #HOh,
@@ -451,6 +462,20 @@ inline bool Cubes::canonical_vertex (Context &ctx) const
         // Canonical: The vertex with the smallest unique valuation.
         return S(4), ctx.vertex = pc[b]->id, ctx.symmetry = 1, true;
 
+    is_rot_symmetric (pc, ctx);
+
+    static __thread bool lock;
+    if (!lock)
+        //if (DIM == ctx.dim)
+    {
+        lock = 1;
+        int m = multiplicity (0);
+        int h = gjl::hyperoctahedral_order (DIM);
+        assert (h % m == 0);
+        xmap.inc (h / m, 1 + max_value);
+        lock = 0;
+    }
+
     return S(0), ctx.vertex = Vertex {}, ctx.symmetry = 0, false;
 }
 
@@ -608,12 +633,14 @@ void Cubes::Stat::print () const
     int64_t ss = 0;
     for (auto &a : n_canon)
         ss += a;
+    ss -= n_canon[5];
     if (ss)
     {
         std::vector<double> dd (n_canon.size());
         for (size_t i = 0; i < n_canon.size (); ++i)
             dd[i] = 100.0 * n_canon[i] / ss;
-        printf ("Cano: %.1f%% / %.1f%% + %.1f%% / %.1f%% + %.1f%%\n",
-                dd[0], dd[1], dd[4], dd[2], dd[3]);
+        printf ("Cano: %.1f%% / %.1f%% + %.1f%% / %.1f%% + %.1f%% + %.1f%%\n",
+                dd[0], dd[1], dd[4], dd[2], dd[3], dd[5]);
+        printf ("5%% = %.1f\n", ss * 0.05);
     }
 }

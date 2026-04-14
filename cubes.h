@@ -19,6 +19,34 @@
 #include "corona.h"
 #include "debug.h"
 
+#include <map>
+
+struct XMap : std::map<std::pair<int,int>,int>
+{
+    void inc (int a, int b)
+    {
+#pragma omp critical
+        {
+            std::pair<int, int> ab (a, b);
+            const auto it = find (ab);
+            if (it == end ())
+                (*this)[ab] = 1;
+            else
+                it->second += 1;
+        }
+    }
+    void show () const
+    {
+        for (const auto &a : *this)
+        {
+            printf ("M(%d, %d): %d\n", a.first.first, a.first.second,
+                    a.second);
+        }
+    }
+};
+
+inline XMap xmap;
+
 // The maximal possible length (in Manhattan metric) of the diagonal
 // of a Cubes' bounding box.  This is used during canonicalization.
 #if !defined MAX_DIAGONAL_LENGTH
@@ -366,6 +394,7 @@ private:
     bool canonical_vertex (Context&) const;
     bool maybe_canonicalize_vertices (Context&, bool same_parity = false);
     void canonicalize_vertices (Context&, bool);
+    bool is_rot_symmetric (const DistPointers&, const Context&) const;
     bool is_flip_symmetric (const DistPointers&, const Context&) const;
     bool is_diagonal_symmetric (const DistPointers&, const Context&) const;
     bool is_diagonal_symmetric (int, int, const Context&) const;
@@ -397,7 +426,7 @@ public:
     {
         bool take_canon;
         std::array<std::atomic<int64_t>, 4> n_succ;
-        std::array<std::atomic<int64_t>, 5> n_canon;
+        std::array<std::atomic<int64_t>, 6> n_canon;
         Stat () : take_canon(0)
         {
             reset ();

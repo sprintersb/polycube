@@ -214,6 +214,8 @@ int main_polycube (int argc, char *argv[])
         if (Cubes::take_stat)
             Cubes::stat.print ();
 
+        xmap.show ();
+        xmap.clear ();
         if (int ci = oeis::cubes_free (dim, i); ci >= 0)
             if (int ci1 = oeis::cubes_free (dim - 1, i); ci1 >= 0)
                 printf ("free %dd = %.1f%%\n", DIM - 1, 100. * ci1 / ci);
